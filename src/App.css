@@ -249,6 +249,62 @@
   padding: 6px 12px;
 }
 
+.nx-store-modal {
+  width: 560px;
+}
+
+.nx-game-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.nx-game-card {
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  padding: 14px;
+}
+
+.nx-instance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.nx-instance-card {
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  padding: 14px;
+  background: var(--nx-panel);
+}
+
+.nx-instance-card-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.nx-instance-card-sub {
+  color: var(--nx-text-muted);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.nx-instance-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.nx-instance-actions button {
+  flex: 1;
+  border-radius: 6px;
+  border: 1px solid var(--nx-border);
+  background: var(--nx-panel-alt);
+  color: var(--nx-text);
+  padding: 6px 0;
+  font-size: 12px;
+}
+
 .nx-empty-state {
   height: 100%;
   display: flex;

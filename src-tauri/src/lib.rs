@@ -1,9 +1,11 @@
 mod db;
+mod games;
 mod keyring_store;
 mod provisioning;
 mod ssh;
 
-use db::{Db, ServerRecord};
+use db::{Db, InstanceRecord, ServerRecord};
+use games::GameTemplate;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::ipc::Channel;
@@ -34,6 +36,19 @@ pub struct AddServerInput {
     pub port: u16,
     pub username: String,
     pub password: String,
+}
+
+/// Opens an authenticated SSH session for a stored server, looking up host/port/username
+/// from the DB and the password from the OS keyring — the frontend never handles secrets.
+async fn connect_to_server(state: &State<'_, AppState>, server_id: &str) -> Result<ssh::SshSession, String> {
+    let server = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.get_server(server_id).map_err(|e| e.to_string())?
+    };
+    let password = keyring_store::get_secret(server_id).map_err(|e| e.to_string())?;
+    ssh::SshSession::connect_password(&server.host, server.port, &server.username, &password)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Module A: registers a new server. Connects via SSH, provisions the isolated
@@ -81,13 +96,9 @@ fn delete_server(state: State<'_, AppState>, id: String) -> Result<(), String> {
 }
 
 /// Module A: live CPU/RAM polling via a lightweight remote one-liner.
-/// The password is looked up from the keyring by server id, never sent from the frontend.
 #[tauri::command]
-async fn get_hardware_stats(server_id: String, host: String, port: u16, username: String) -> Result<HardwareStats, String> {
-    let password = keyring_store::get_secret(&server_id).map_err(|e| e.to_string())?;
-    let mut session = ssh::SshSession::connect_password(&host, port, &username, &password)
-        .await
-        .map_err(|e| e.to_string())?;
+async fn get_hardware_stats(state: State<'_, AppState>, server_id: String) -> Result<HardwareStats, String> {
+    let mut session = connect_to_server(&state, &server_id).await?;
 
     let cpu_raw = session
         .exec("top -bn1 | grep 'Cpu(s)' | awk '{print $2}'")
@@ -106,13 +117,70 @@ async fn get_hardware_stats(server_id: String, host: String, port: u16, username
     Ok(HardwareStats { cpu_percent, ram_used_mb, ram_total_mb })
 }
 
-/// Module C: start/stop/restart a game instance via systemd.
+/// Module B: lists the games available in the bundled template database.
 #[tauri::command]
-async fn control_instance(server_id: String, host: String, port: u16, username: String, unit_name: String, action: String) -> Result<String, String> {
-    let password = keyring_store::get_secret(&server_id).map_err(|e| e.to_string())?;
-    let mut session = ssh::SshSession::connect_password(&host, port, &username, &password)
+fn list_games() -> Vec<GameTemplate> {
+    games::load_templates()
+}
+
+/// Module B: lists installed gameserver instances for a server.
+#[tauri::command]
+fn list_instances(state: State<'_, AppState>, server_id: String) -> Result<Vec<InstanceRecord>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_instances(&server_id).map_err(|e| e.to_string())
+}
+
+/// Module B: installs a game server from its template — runs the install steps over SSH,
+/// generates + enables a systemd unit (running as `gameserver`, never root), and persists
+/// the instance so it shows up as a tile in the UI.
+#[tauri::command]
+async fn install_game(
+    state: State<'_, AppState>,
+    server_id: String,
+    game_id: String,
+    display_name: String,
+) -> Result<InstanceRecord, String> {
+    let template = games::find_template(&game_id).ok_or_else(|| format!("Unbekanntes Spiel: {game_id}"))?;
+
+    let mut session = connect_to_server(&state, &server_id).await?;
+
+    let instance_id = uuid::Uuid::new_v4().to_string();
+    let ram_limit_mb = template.default_ram_limit_mb;
+
+    for step in &template.install.steps {
+        let rendered = games::render_step(step, &instance_id, ram_limit_mb);
+        session.exec(&rendered).await.map_err(|e| e.to_string())?;
+    }
+
+    let install_path = format!("/home/gameserver/instances/{instance_id}");
+    let start_command = games::render_step(&template.start_command, &instance_id, ram_limit_mb);
+    let unit_name = format!("novanexus-{instance_id}");
+    let unit_contents = provisioning::render_systemd_unit(&instance_id, &install_path, &start_command);
+
+    provisioning::install_systemd_unit(&mut session, &unit_name, &unit_contents)
         .await
         .map_err(|e| e.to_string())?;
+
+    let record = InstanceRecord {
+        id: instance_id,
+        server_id,
+        game_id,
+        display_name,
+        install_path,
+        systemd_unit: unit_name,
+        cpu_limit_percent: template.default_cpu_limit_percent,
+        ram_limit_mb,
+    };
+
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.insert_instance(&record).map_err(|e| e.to_string())?;
+    Ok(record)
+}
+
+/// Module C: start/stop/restart a game instance via systemd.
+#[tauri::command]
+async fn control_instance(state: State<'_, AppState>, server_id: String, unit_name: String, action: String) -> Result<String, String> {
+    let mut session = connect_to_server(&state, &server_id).await?;
     provisioning::control_instance(&mut session, &unit_name, &action)
         .await
         .map_err(|e| e.to_string())
@@ -122,17 +190,12 @@ async fn control_instance(server_id: String, host: String, port: u16, username: 
 /// so the UI thread never blocks even under heavy log throughput.
 #[tauri::command]
 async fn stream_instance_logs(
+    state: State<'_, AppState>,
     server_id: String,
-    host: String,
-    port: u16,
-    username: String,
     unit_name: String,
     on_event: Channel<LogEvent>,
 ) -> Result<(), String> {
-    let password = keyring_store::get_secret(&server_id).map_err(|e| e.to_string())?;
-    let mut session = ssh::SshSession::connect_password(&host, port, &username, &password)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut session = connect_to_server(&state, &server_id).await?;
 
     let output = session
         .exec(&format!("journalctl -fu {unit_name} -n 200 --no-pager"))
@@ -166,6 +229,9 @@ pub fn run() {
             list_servers,
             delete_server,
             get_hardware_stats,
+            list_games,
+            list_instances,
+            install_game,
             control_instance,
             stream_instance_logs,
         ])
