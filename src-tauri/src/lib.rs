@@ -46,9 +46,15 @@ async fn connect_to_server(state: &State<'_, AppState>, server_id: &str) -> Resu
         db.get_server(server_id).map_err(|e| e.to_string())?
     };
     let password = keyring_store::get_secret(server_id).map_err(|e| e.to_string())?;
-    ssh::SshSession::connect_password(&server.host, server.port, &server.username, &password)
+    let mut session = ssh::SshSession::connect_password(&server.host, server.port, &server.username, &password)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    // Self-healing: makes sure passwordless sudo is set up even for servers added
+    // before this was introduced, so existing connections repair themselves.
+    provisioning::ensure_passwordless_sudo(&mut session, &server.username, &password)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(session)
 }
 
 /// Module A: registers a new server. Connects via SSH, provisions the isolated
@@ -57,6 +63,9 @@ async fn connect_to_server(state: &State<'_, AppState>, server_id: &str) -> Resu
 #[tauri::command]
 async fn add_server(state: State<'_, AppState>, input: AddServerInput) -> Result<ServerRecord, String> {
     let mut session = ssh::SshSession::connect_password(&input.host, input.port, &input.username, &input.password)
+        .await
+        .map_err(|e| e.to_string())?;
+    provisioning::ensure_passwordless_sudo(&mut session, &input.username, &input.password)
         .await
         .map_err(|e| e.to_string())?;
     provisioning::bootstrap_server(&mut session)

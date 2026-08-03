@@ -48,6 +48,26 @@ impl SshSession {
         Ok(String::from_utf8_lossy(&output).to_string())
     }
 
+    /// Runs a command, writing `stdin_data` to it right after starting (e.g. to answer
+    /// a `sudo -S` password prompt) before reading the combined output to completion.
+    pub async fn exec_with_stdin(&mut self, command: &str, stdin_data: &[u8]) -> Result<String> {
+        let mut channel = self.handle.channel_open_session().await?;
+        channel.exec(true, command).await?;
+        channel.data(stdin_data).await?;
+        channel.eof().await?;
+
+        let mut output = Vec::new();
+        while let Some(msg) = channel.wait().await {
+            match msg {
+                ChannelMsg::Data { data } => output.extend_from_slice(&data),
+                ChannelMsg::ExtendedData { data, .. } => output.extend_from_slice(&data),
+                ChannelMsg::Eof | ChannelMsg::Close => break,
+                _ => {}
+            }
+        }
+        Ok(String::from_utf8_lossy(&output).to_string())
+    }
+
     /// Runs a (potentially long-lived / follow-mode) command, invoking `on_line` for every
     /// complete line as data arrives, so the caller can forward it live (e.g. to the UI)
     /// instead of waiting for the whole process to finish.

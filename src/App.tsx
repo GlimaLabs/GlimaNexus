@@ -130,6 +130,24 @@ function App() {
     }
   }
 
+  async function handleUninstall(instance: InstanceRecord) {
+    if (!selectedServerId) return;
+    if (!confirm(`"${instance.display_name}" wirklich deinstallieren? Der Dienst wird gestoppt und aus NovaNexus entfernt.`)) return;
+    setInstanceBusy(instance.id);
+    try {
+      await invoke("delete_instance", {
+        serverId: selectedServerId,
+        instanceId: instance.id,
+        unitName: instance.systemd_unit,
+      });
+      setInstances((prev) => prev.filter((i) => i.id !== instance.id));
+    } catch (err) {
+      setInstanceError(`${instance.display_name}: ${String(err)}`);
+    } finally {
+      setInstanceBusy(null);
+    }
+  }
+
   async function handleReload() {
     if (!selectedServerId) return;
     setServerBusy(true);
@@ -335,6 +353,14 @@ function App() {
                           </button>
                           <button onClick={() => setOpenInstanceId(instance.id)}>Verwalten</button>
                         </div>
+                        <button
+                          className="nx-btn-danger"
+                          style={{ marginTop: 6, width: "100%", fontSize: 12, background: "transparent", border: "1px solid var(--nx-border)", borderRadius: 6, padding: "6px 0" }}
+                          disabled={instanceBusy === instance.id}
+                          onClick={() => handleUninstall(instance)}
+                        >
+                          Deinstallieren
+                        </button>
                       </div>
                     );
                   })}

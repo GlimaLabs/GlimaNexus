@@ -1,6 +1,35 @@
 use crate::ssh::SshSession;
 use anyhow::Result;
 
+/// Grants the SSH login user passwordless sudo, scoped to that one user via a dedicated
+/// sudoers.d file. Required because our SSH commands run non-interactively (no TTY), so
+/// `sudo` can never prompt for a password - without this, every privileged command
+/// (creating the `gameserver` user, writing systemd units, starting services) silently
+/// fails. Idempotent: safe to call on every connection, a no-op once already set up.
+/// Uses the one password we already have to answer sudo's `-S` stdin prompt exactly once.
+pub async fn ensure_passwordless_sudo(ssh: &mut SshSession, username: &str, password: &str) -> Result<()> {
+    let check = ssh.exec("sudo -n true 2>&1; echo EXIT:$?").await?;
+    if check.contains("EXIT:0") {
+        return Ok(()); // already configured
+    }
+
+    // `sudo` must be the head of the exec'd process (no upstream pipe), otherwise whatever
+    // feeds it becomes the thing consuming our piped stdin instead of sudo's password prompt.
+    let script = format!(
+        "sudo -S -p '' bash -c \"echo '{username} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/novanexus && chmod 440 /etc/sudoers.d/novanexus\""
+    );
+    let stdin = format!("{password}\n");
+    let output = ssh.exec_with_stdin(&script, stdin.as_bytes()).await?;
+
+    let verify = ssh.exec("sudo -n true 2>&1; echo EXIT:$?").await?;
+    if !verify.contains("EXIT:0") {
+        return Err(anyhow::anyhow!(
+            "Konnte passwortloses Sudo nicht einrichten (Passwort falsch oder Nutzer nicht sudo-berechtigt): {output}"
+        ));
+    }
+    Ok(())
+}
+
 /// Creates the isolated `gameserver` system user (no root execution of game processes)
 /// and installs base dependencies (SteamCMD, Java, lib32 packages) on a fresh Ubuntu/Debian box.
 pub async fn bootstrap_server(ssh: &mut SshSession) -> Result<()> {
