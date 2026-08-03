@@ -2,6 +2,8 @@
 
 Ressourcenschonende, plattformübergreifende Desktop-App (Tauri 2) zum Verwalten von dedizierten Gameservern auf Linux-VPS via SSH — ohne CLI-Kenntnisse.
 
+Lizenziert unter [GPL-3.0](LICENSE) — bleibt Open Source, Forks müssen offen bleiben.
+
 ## Stack
 
 - **Frontend**: React + TypeScript (Vite)
