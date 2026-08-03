@@ -188,6 +188,67 @@
   color: var(--nx-danger);
 }
 
+.nx-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.nx-modal {
+  background: var(--nx-panel);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  padding: 24px;
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nx-modal h2 {
+  margin: 0;
+}
+
+.nx-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--nx-text-muted);
+}
+
+.nx-modal input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--nx-border);
+  background: var(--nx-panel-alt);
+  color: var(--nx-text);
+}
+
+.nx-modal-row {
+  display: flex;
+  gap: 12px;
+}
+
+.nx-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.nx-modal-actions button[type="button"] {
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+
 .nx-empty-state {
   height: 100%;
   display: flex;

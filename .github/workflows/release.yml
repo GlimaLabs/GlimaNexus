@@ -17,6 +17,9 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Install OpenSSL (dev, for SQLCipher linking)
+        run: choco install openssl -y --no-progress
+
       - name: Install frontend dependencies
         run: npm install
 
@@ -25,6 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          OPENSSL_DIR: "C:\\Program Files\\OpenSSL-Win64"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "NovaNexus ${{ github.ref_name }}"

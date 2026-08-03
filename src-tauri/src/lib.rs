@@ -3,15 +3,14 @@ mod keyring_store;
 mod provisioning;
 mod ssh;
 
+use db::{Db, ServerRecord};
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 use tauri::ipc::Channel;
+use tauri::{Manager, State};
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ServerConnectionInput {
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
+pub struct AppState {
+    pub db: Mutex<Db>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -28,22 +27,65 @@ pub enum LogEvent {
     Closed,
 }
 
-/// Module A: connection test + bootstrap (creates `gameserver` user, installs deps).
+#[derive(Deserialize)]
+pub struct AddServerInput {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+}
+
+/// Module A: registers a new server. Connects via SSH, provisions the isolated
+/// `gameserver` user + base deps, then persists metadata (SQLite) and the
+/// password in the OS keyring — never in plaintext.
 #[tauri::command]
-async fn connect_and_provision(input: ServerConnectionInput) -> Result<String, String> {
+async fn add_server(state: State<'_, AppState>, input: AddServerInput) -> Result<ServerRecord, String> {
     let mut session = ssh::SshSession::connect_password(&input.host, input.port, &input.username, &input.password)
         .await
         .map_err(|e| e.to_string())?;
     provisioning::bootstrap_server(&mut session)
         .await
         .map_err(|e| e.to_string())?;
-    Ok("Server erfolgreich verbunden und vorbereitet".into())
+
+    let id = uuid::Uuid::new_v4().to_string();
+    keyring_store::store_secret(&id, &input.password).map_err(|e| e.to_string())?;
+
+    let record = ServerRecord {
+        id,
+        name: input.name,
+        host: input.host,
+        port: input.port,
+        username: input.username,
+    };
+
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.insert_server(&record).map_err(|e| e.to_string())?;
+    Ok(record)
+}
+
+/// Module A: lists all registered servers from the local encrypted database.
+#[tauri::command]
+fn list_servers(state: State<'_, AppState>) -> Result<Vec<ServerRecord>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.list_servers().map_err(|e| e.to_string())
+}
+
+/// Removes a server: deletes its DB row and its stored keyring secret.
+#[tauri::command]
+fn delete_server(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_server(&id).map_err(|e| e.to_string())?;
+    let _ = keyring_store::delete_secret(&id);
+    Ok(())
 }
 
 /// Module A: live CPU/RAM polling via a lightweight remote one-liner.
+/// The password is looked up from the keyring by server id, never sent from the frontend.
 #[tauri::command]
-async fn get_hardware_stats(input: ServerConnectionInput) -> Result<HardwareStats, String> {
-    let mut session = ssh::SshSession::connect_password(&input.host, input.port, &input.username, &input.password)
+async fn get_hardware_stats(server_id: String, host: String, port: u16, username: String) -> Result<HardwareStats, String> {
+    let password = keyring_store::get_secret(&server_id).map_err(|e| e.to_string())?;
+    let mut session = ssh::SshSession::connect_password(&host, port, &username, &password)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -66,8 +108,9 @@ async fn get_hardware_stats(input: ServerConnectionInput) -> Result<HardwareStat
 
 /// Module C: start/stop/restart a game instance via systemd.
 #[tauri::command]
-async fn control_instance(input: ServerConnectionInput, unit_name: String, action: String) -> Result<String, String> {
-    let mut session = ssh::SshSession::connect_password(&input.host, input.port, &input.username, &input.password)
+async fn control_instance(server_id: String, host: String, port: u16, username: String, unit_name: String, action: String) -> Result<String, String> {
+    let password = keyring_store::get_secret(&server_id).map_err(|e| e.to_string())?;
+    let mut session = ssh::SshSession::connect_password(&host, port, &username, &password)
         .await
         .map_err(|e| e.to_string())?;
     provisioning::control_instance(&mut session, &unit_name, &action)
@@ -79,11 +122,15 @@ async fn control_instance(input: ServerConnectionInput, unit_name: String, actio
 /// so the UI thread never blocks even under heavy log throughput.
 #[tauri::command]
 async fn stream_instance_logs(
-    input: ServerConnectionInput,
+    server_id: String,
+    host: String,
+    port: u16,
+    username: String,
     unit_name: String,
     on_event: Channel<LogEvent>,
 ) -> Result<(), String> {
-    let mut session = ssh::SshSession::connect_password(&input.host, input.port, &input.username, &input.password)
+    let password = keyring_store::get_secret(&server_id).map_err(|e| e.to_string())?;
+    let mut session = ssh::SshSession::connect_password(&host, port, &username, &password)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -105,8 +152,19 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            let app_data_dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&app_data_dir)?;
+            let db_path = app_data_dir.join("novanexus.db");
+            let db_key = keyring_store::get_or_create_db_key()?;
+            let db = Db::open(db_path, &db_key)?;
+            app.manage(AppState { db: Mutex::new(db) });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
-            connect_and_provision,
+            add_server,
+            list_servers,
+            delete_server,
             get_hardware_stats,
             control_instance,
             stream_instance_logs,

@@ -36,7 +36,7 @@ russh-keys = "0.45"
 keyring = "3"
 
 # Encrypted local database (SQLCipher via bundled OpenSSL)
-rusqlite = { version = "0.31", features = ["bundled-sqlcipher-vendored-openssl"] }
+rusqlite = { version = "0.31", features = ["bundled-sqlcipher"] }
 
 anyhow = "1"
 thiserror = "1"
