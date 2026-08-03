@@ -47,4 +47,35 @@ impl SshSession {
         }
         Ok(String::from_utf8_lossy(&output).to_string())
     }
+
+    /// Runs a (potentially long-lived / follow-mode) command, invoking `on_line` for every
+    /// complete line as data arrives, so the caller can forward it live (e.g. to the UI)
+    /// instead of waiting for the whole process to finish.
+    pub async fn exec_stream_lines<F>(&mut self, command: &str, mut on_line: F) -> Result<()>
+    where
+        F: FnMut(String) + Send,
+    {
+        let mut channel = self.handle.channel_open_session().await?;
+        channel.exec(true, command).await?;
+
+        let mut buffer = Vec::new();
+        while let Some(msg) = channel.wait().await {
+            match msg {
+                ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
+                    buffer.extend_from_slice(&data);
+                    while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+                        let line: Vec<u8> = buffer.drain(..=pos).collect();
+                        let text = String::from_utf8_lossy(&line).trim_end().to_string();
+                        on_line(text);
+                    }
+                }
+                ChannelMsg::Eof | ChannelMsg::Close => break,
+                _ => {}
+            }
+        }
+        if !buffer.is_empty() {
+            on_line(String::from_utf8_lossy(&buffer).trim_end().to_string());
+        }
+        Ok(())
+    }
 }

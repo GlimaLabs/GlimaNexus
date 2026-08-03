@@ -4,6 +4,7 @@ import "./App.css";
 import UpdateBanner from "./UpdateBanner";
 import AddServerDialog from "./AddServerDialog";
 import GameStoreDialog from "./GameStoreDialog";
+import InstanceDetail from "./InstanceDetail";
 import type { InstanceRecord, ServerRecord } from "./types";
 
 type HardwareStats = {
@@ -21,6 +22,9 @@ function App() {
   const [stats, setStats] = useState<Record<string, HardwareStats>>({});
   const [instances, setInstances] = useState<InstanceRecord[]>([]);
   const [instanceBusy, setInstanceBusy] = useState<string | null>(null);
+  const [openInstanceId, setOpenInstanceId] = useState<string | null>(null);
+  const [cpuHistory, setCpuHistory] = useState<Record<string, number[]>>({});
+  const [ramHistory, setRamHistory] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
     loadServers();
@@ -59,7 +63,11 @@ function App() {
     const interval = setInterval(() => {
       servers.forEach((server) => {
         invoke<HardwareStats>("get_hardware_stats", { serverId: server.id })
-          .then((result) => setStats((prev) => ({ ...prev, [server.id]: result })))
+          .then((result) => {
+            setStats((prev) => ({ ...prev, [server.id]: result }));
+            setCpuHistory((prev) => ({ ...prev, [server.id]: [...(prev[server.id] ?? []).slice(-29), result.cpu_percent] }));
+            setRamHistory((prev) => ({ ...prev, [server.id]: [...(prev[server.id] ?? []).slice(-29), result.ram_used_mb] }));
+          })
           .catch(() => {});
       });
     }, 8000);
@@ -180,29 +188,52 @@ function App() {
               </p>
             )}
 
-            <h3>Installierte Gameserver</h3>
-            {instances.length === 0 && (
-              <p style={{ color: "var(--nx-text-muted)" }}>Noch keine Gameserver installiert.</p>
-            )}
-            <div className="nx-instance-grid">
-              {instances.map((instance) => (
-                <div key={instance.id} className="nx-instance-card">
-                  <div className="nx-instance-card-title">{instance.display_name}</div>
-                  <div className="nx-instance-card-sub">{instance.systemd_unit}</div>
-                  <div className="nx-instance-actions">
-                    <button disabled={instanceBusy === instance.id} onClick={() => runInstanceAction(instance, "start")}>
-                      Start
-                    </button>
-                    <button disabled={instanceBusy === instance.id} onClick={() => runInstanceAction(instance, "stop")}>
-                      Stop
-                    </button>
-                    <button disabled={instanceBusy === instance.id} onClick={() => runInstanceAction(instance, "restart")}>
-                      Neustart
-                    </button>
-                  </div>
+            {openInstanceId ? (
+              (() => {
+                const instance = instances.find((i) => i.id === openInstanceId);
+                return instance ? (
+                  <InstanceDetail
+                    serverId={selectedServer.id}
+                    instance={instance}
+                    cpuHistory={cpuHistory[selectedServer.id] ?? []}
+                    ramHistory={ramHistory[selectedServer.id] ?? []}
+                    onClose={() => setOpenInstanceId(null)}
+                  />
+                ) : null;
+              })()
+            ) : (
+              <>
+                <h3>Installierte Gameserver</h3>
+                {instances.length === 0 && (
+                  <p style={{ color: "var(--nx-text-muted)" }}>Noch keine Gameserver installiert.</p>
+                )}
+                <div className="nx-instance-grid">
+                  {instances.map((instance) => (
+                    <div key={instance.id} className="nx-instance-card">
+                      <div className="nx-instance-card-title">{instance.display_name}</div>
+                      <div className="nx-instance-card-sub">{instance.systemd_unit}</div>
+                      <div className="nx-instance-actions">
+                        <button disabled={instanceBusy === instance.id} onClick={() => runInstanceAction(instance, "start")}>
+                          Start
+                        </button>
+                        <button disabled={instanceBusy === instance.id} onClick={() => runInstanceAction(instance, "stop")}>
+                          Stop
+                        </button>
+                        <button disabled={instanceBusy === instance.id} onClick={() => runInstanceAction(instance, "restart")}>
+                          Neustart
+                        </button>
+                      </div>
+                      <button
+                        style={{ marginTop: 8, width: "100%", fontSize: 12 }}
+                        onClick={() => setOpenInstanceId(instance.id)}
+                      >
+                        Verwalten
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="nx-empty-state">

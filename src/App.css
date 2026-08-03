@@ -305,6 +305,89 @@
   font-size: 12px;
 }
 
+.nx-instance-detail {
+  margin-top: 16px;
+}
+
+.nx-instance-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.nx-back-btn {
+  background: transparent;
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.nx-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--nx-border);
+  margin-bottom: 16px;
+}
+
+.nx-tab {
+  background: transparent;
+  border: none;
+  color: var(--nx-text-muted);
+  padding: 8px 14px;
+  font-size: 13px;
+  border-bottom: 2px solid transparent;
+}
+
+.nx-tab.active {
+  color: var(--nx-accent);
+  border-bottom-color: var(--nx-accent);
+}
+
+.nx-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.nx-chart-card,
+.nx-fact-card {
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  padding: 14px;
+  background: var(--nx-panel);
+  font-size: 12px;
+  color: var(--nx-text-muted);
+}
+
+.nx-chart-title {
+  color: var(--nx-text);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.nx-fact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nx-console {
+  background: #05080c;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  padding: 12px;
+  height: 320px;
+  overflow-y: auto;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  color: #b6e6df;
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+
 .nx-empty-state {
   height: 100%;
   display: flex;

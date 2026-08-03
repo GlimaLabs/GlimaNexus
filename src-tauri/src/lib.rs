@@ -186,8 +186,9 @@ async fn control_instance(state: State<'_, AppState>, server_id: String, unit_na
         .map_err(|e| e.to_string())
 }
 
-/// Module C: streams `journalctl -fu <unit>` line-by-line to the frontend via a Tauri Channel,
-/// so the UI thread never blocks even under heavy log throughput.
+/// Module C: streams `journalctl -fu <unit>` live, line-by-line, to the frontend via a Tauri
+/// Channel. Runs as a detached background task so the command returns immediately and the
+/// UI thread is never blocked, even while the remote log keeps following indefinitely.
 #[tauri::command]
 async fn stream_instance_logs(
     state: State<'_, AppState>,
@@ -197,15 +198,16 @@ async fn stream_instance_logs(
 ) -> Result<(), String> {
     let mut session = connect_to_server(&state, &server_id).await?;
 
-    let output = session
-        .exec(&format!("journalctl -fu {unit_name} -n 200 --no-pager"))
-        .await
-        .map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn(async move {
+        let command = format!("journalctl -fu {unit_name} -n 200 --no-pager");
+        let _ = session
+            .exec_stream_lines(&command, |line| {
+                let _ = on_event.send(LogEvent::Line { text: line });
+            })
+            .await;
+        let _ = on_event.send(LogEvent::Closed);
+    });
 
-    for line in output.lines() {
-        let _ = on_event.send(LogEvent::Line { text: line.to_string() });
-    }
-    let _ = on_event.send(LogEvent::Closed);
     Ok(())
 }
 
