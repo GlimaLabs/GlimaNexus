@@ -103,6 +103,8 @@ async fn stream_instance_logs(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             connect_and_provision,
             get_hardware_stats,

@@ -159,6 +159,35 @@
   overflow-y: auto;
 }
 
+.nx-update-banner {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--nx-panel);
+  border: 1px solid var(--nx-accent);
+  border-radius: var(--nx-radius);
+  padding: 10px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 13px;
+}
+
+.nx-update-btn {
+  background: var(--nx-accent);
+  color: #06231f;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-weight: 600;
+}
+
+.nx-update-error {
+  color: var(--nx-danger);
+}
+
 .nx-empty-state {
   height: 100%;
   display: flex;

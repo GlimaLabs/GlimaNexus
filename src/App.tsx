@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./App.css";
+import UpdateBanner from "./UpdateBanner";
 
 type Server = {
   id: string;
@@ -25,6 +26,7 @@ function App() {
 
   return (
     <div className="nx-shell">
+      <UpdateBanner />
       <aside className="nx-sidebar">
         <div className="nx-brand">
           <span className="nx-brand-icon">◆</span>
