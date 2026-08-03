@@ -1,0 +1,31 @@
+:root {
+  --nx-bg: #0d1117;
+  --nx-panel: #131a24;
+  --nx-panel-alt: #161f2c;
+  --nx-border: #1f2937;
+  --nx-text: #e6edf3;
+  --nx-text-muted: #8b98a5;
+  --nx-accent: #2dd4bf;
+  --nx-accent-soft: rgba(45, 212, 191, 0.12);
+  --nx-danger: #f87171;
+  --nx-warning: #fbbf24;
+  --nx-radius: 10px;
+  --nx-font: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--nx-bg);
+  color: var(--nx-text);
+  font-family: var(--nx-font);
+  font-size: 14px;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
