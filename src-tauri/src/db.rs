@@ -13,6 +13,7 @@ pub struct ServerRecord {
     pub host: String,
     pub port: u16,
     pub username: String,
+    pub os_info: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -42,6 +43,7 @@ impl Db {
                 port INTEGER NOT NULL DEFAULT 22,
                 username TEXT NOT NULL,
                 auth_method TEXT NOT NULL, -- 'password' | 'key'
+                os_info TEXT,
                 created_at TEXT NOT NULL
             );
 
@@ -58,14 +60,16 @@ impl Db {
             );
             ",
         )?;
+        // Migration for DBs created before os_info existed.
+        let _ = conn.execute("ALTER TABLE servers ADD COLUMN os_info TEXT", []);
         Ok(Self { conn })
     }
 
     pub fn insert_server(&self, record: &ServerRecord) -> rusqlite::Result<()> {
         self.conn.execute(
-            "INSERT INTO servers (id, name, host, port, username, auth_method, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, 'password', datetime('now'))",
-            params![record.id, record.name, record.host, record.port, record.username],
+            "INSERT INTO servers (id, name, host, port, username, auth_method, os_info, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'password', ?6, datetime('now'))",
+            params![record.id, record.name, record.host, record.port, record.username, record.os_info],
         )?;
         Ok(())
     }
@@ -73,7 +77,7 @@ impl Db {
     pub fn list_servers(&self) -> rusqlite::Result<Vec<ServerRecord>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, name, host, port, username FROM servers ORDER BY created_at ASC")?;
+            .prepare("SELECT id, name, host, port, username, os_info FROM servers ORDER BY created_at ASC")?;
         let rows = stmt.query_map([], |row| {
             Ok(ServerRecord {
                 id: row.get(0)?,
@@ -81,6 +85,7 @@ impl Db {
                 host: row.get(2)?,
                 port: row.get(3)?,
                 username: row.get(4)?,
+                os_info: row.get(5)?,
             })
         })?;
         rows.collect()
@@ -88,7 +93,7 @@ impl Db {
 
     pub fn get_server(&self, id: &str) -> rusqlite::Result<ServerRecord> {
         self.conn.query_row(
-            "SELECT id, name, host, port, username FROM servers WHERE id = ?1",
+            "SELECT id, name, host, port, username, os_info FROM servers WHERE id = ?1",
             params![id],
             |row| {
                 Ok(ServerRecord {
@@ -97,6 +102,7 @@ impl Db {
                     host: row.get(2)?,
                     port: row.get(3)?,
                     username: row.get(4)?,
+                    os_info: row.get(5)?,
                 })
             },
         )
@@ -143,5 +149,10 @@ impl Db {
             })
         })?;
         rows.collect()
+    }
+
+    pub fn delete_instance(&self, id: &str) -> rusqlite::Result<()> {
+        self.conn.execute("DELETE FROM instances WHERE id = ?1", params![id])?;
+        Ok(())
     }
 }

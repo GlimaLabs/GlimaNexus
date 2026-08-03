@@ -63,6 +63,15 @@ async fn add_server(state: State<'_, AppState>, input: AddServerInput) -> Result
         .await
         .map_err(|e| e.to_string())?;
 
+    let os_raw = session
+        .exec("grep PRETTY_NAME /etc/os-release | cut -d'\"' -f2")
+        .await
+        .unwrap_or_default();
+    let os_info = {
+        let trimmed = os_raw.trim();
+        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    };
+
     let id = uuid::Uuid::new_v4().to_string();
     keyring_store::store_secret(&id, &input.password).map_err(|e| e.to_string())?;
 
@@ -72,11 +81,22 @@ async fn add_server(state: State<'_, AppState>, input: AddServerInput) -> Result
         host: input.host,
         port: input.port,
         username: input.username,
+        os_info,
     };
 
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.insert_server(&record).map_err(|e| e.to_string())?;
     Ok(record)
+}
+
+/// Reboots the underlying VPS/root server. Destructive/disruptive - the frontend
+/// must confirm with the user before calling this.
+#[tauri::command]
+async fn reboot_server(state: State<'_, AppState>, server_id: String) -> Result<(), String> {
+    let mut session = connect_to_server(&state, &server_id).await?;
+    // The connection drops as the machine reboots - that's expected, not an error.
+    let _ = session.exec("sudo reboot").await;
+    Ok(())
 }
 
 /// Module A: lists all registered servers from the local encrypted database.
@@ -161,6 +181,12 @@ async fn install_game(
         .await
         .map_err(|e| e.to_string())?;
 
+    // Start the instance right after install so the user doesn't have to know
+    // that "enable" (survive reboot) and "start" (running now) are different things.
+    provisioning::control_instance(&mut session, &unit_name, "start")
+        .await
+        .map_err(|e| e.to_string())?;
+
     let record = InstanceRecord {
         id: instance_id,
         server_id,
@@ -184,6 +210,48 @@ async fn control_instance(state: State<'_, AppState>, server_id: String, unit_na
     provisioning::control_instance(&mut session, &unit_name, &action)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct InstanceStatus {
+    pub state: String,
+    pub uptime_seconds: i64,
+}
+
+/// Module C: reports whether a game instance's systemd unit is currently running
+/// and how long it's been up, so the UI can show a real status badge + uptime
+/// instead of guessing.
+#[tauri::command]
+async fn get_instance_status(state: State<'_, AppState>, server_id: String, unit_name: String) -> Result<InstanceStatus, String> {
+    let mut session = connect_to_server(&state, &server_id).await?;
+    let output = session
+        .exec(&format!(
+            "STATE=$(systemctl is-active {unit_name}); \
+             TS=$(systemctl show -p ActiveEnterTimestamp --value {unit_name}); \
+             if [ -n \"$TS\" ] && [ \"$TS\" != \"n/a\" ]; then \
+               NOW=$(date +%s); THEN=$(date -d \"$TS\" +%s 2>/dev/null || echo $NOW); UPTIME=$((NOW-THEN)); \
+             else UPTIME=0; fi; \
+             echo \"$STATE|$UPTIME\""
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut parts = output.trim().split('|');
+    let state = parts.next().unwrap_or("unknown").to_string();
+    let uptime_seconds = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+    Ok(InstanceStatus { state, uptime_seconds })
+}
+
+/// Stops the instance's service, disables it, and removes it from the local list.
+/// Leaves the installed files on the server untouched.
+#[tauri::command]
+async fn delete_instance(state: State<'_, AppState>, server_id: String, instance_id: String, unit_name: String) -> Result<(), String> {
+    if let Ok(mut session) = connect_to_server(&state, &server_id).await {
+        let _ = provisioning::control_instance(&mut session, &unit_name, "stop").await;
+        let _ = session.exec(&format!("sudo systemctl disable {unit_name}")).await;
+    }
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_instance(&instance_id).map_err(|e| e.to_string())
 }
 
 /// Module C: streams `journalctl -fu <unit>` live, line-by-line, to the frontend via a Tauri
@@ -230,11 +298,14 @@ pub fn run() {
             add_server,
             list_servers,
             delete_server,
+            reboot_server,
             get_hardware_stats,
             list_games,
             list_instances,
             install_game,
             control_instance,
+            get_instance_status,
+            delete_instance,
             stream_instance_logs,
         ])
         .run(tauri::generate_context!())

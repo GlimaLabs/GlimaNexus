@@ -1,8 +1,64 @@
+.nx-titlebar {
+  grid-column: 1 / -1;
+  height: 36px;
+  background: var(--nx-panel);
+  border-bottom: 1px solid var(--nx-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 12px;
+  user-select: none;
+}
+
+.nx-titlebar-title {
+  font-size: 12px;
+  color: var(--nx-text-muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.nx-titlebar-controls {
+  display: flex;
+  height: 100%;
+}
+
+.nx-titlebar-btn {
+  width: 44px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: var(--nx-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nx-titlebar-btn:hover {
+  background: var(--nx-panel-alt);
+  color: var(--nx-text);
+}
+
+.nx-titlebar-close:hover {
+  background: #b91c1c;
+  color: #fff;
+}
+
 .nx-shell {
   display: grid;
   grid-template-columns: 220px 300px 1fr;
+  grid-template-rows: 36px 1fr;
   height: 100vh;
   overflow: hidden;
+}
+
+.nx-shell > .nx-titlebar {
+  grid-row: 1;
+}
+
+.nx-shell > .nx-sidebar,
+.nx-shell > .nx-server-list,
+.nx-shell > .nx-main {
+  grid-row: 2;
 }
 
 /* Global sidebar */
@@ -17,21 +73,15 @@
 .nx-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
   padding: 8px 8px 20px;
-  font-weight: 700;
-  font-size: 16px;
 }
 
-.nx-brand-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--nx-accent-soft);
-  color: var(--nx-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.nx-brand-logo {
+  max-width: 100%;
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px var(--nx-accent-soft));
 }
 
 .nx-nav {
@@ -265,6 +315,133 @@
   padding: 14px;
 }
 
+.nx-server-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  background: var(--nx-panel);
+  padding: 14px 18px;
+}
+
+.nx-server-header-icon {
+  font-size: 28px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--nx-panel-alt);
+  border-radius: 10px;
+}
+
+.nx-server-header-info {
+  flex: 1;
+}
+
+.nx-server-header-info h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.nx-server-header-info p {
+  margin: 2px 0 0;
+  color: var(--nx-text-muted);
+  font-size: 13px;
+}
+
+.nx-conn-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--nx-text-muted);
+  border: 1px solid var(--nx-border);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+.nx-conn-pill.connected {
+  color: var(--nx-accent);
+  border-color: var(--nx-accent);
+}
+
+.nx-conn-pill .nx-status-dot {
+  background: currentColor;
+}
+
+.nx-server-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.nx-server-header-actions button {
+  background: var(--nx-panel-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.nx-server-header-actions button:hover {
+  border-color: var(--nx-accent);
+}
+
+.nx-btn-danger {
+  color: var(--nx-danger) !important;
+}
+
+.nx-btn-danger:hover {
+  border-color: var(--nx-danger) !important;
+}
+
+.nx-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.nx-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.nx-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--nx-panel-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.nx-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 2px;
+  top: 2px;
+  background: var(--nx-text-muted);
+  border-radius: 50%;
+  transition: 0.15s;
+}
+
+.nx-toggle input:checked + .nx-toggle-slider {
+  background: var(--nx-accent-soft);
+  border-color: var(--nx-accent);
+}
+
+.nx-toggle input:checked + .nx-toggle-slider::before {
+  transform: translateX(16px);
+  background: var(--nx-accent);
+}
+
 .nx-instance-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -281,7 +458,10 @@
 
 .nx-instance-card-title {
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .nx-instance-card-sub {

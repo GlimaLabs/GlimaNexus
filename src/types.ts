@@ -4,6 +4,12 @@ export type ServerRecord = {
   host: string;
   port: number;
   username: string;
+  os_info: string | null;
+};
+
+export type InstanceStatus = {
+  state: string;
+  uptime_seconds: number;
 };
 
 export type GameTemplate = {
