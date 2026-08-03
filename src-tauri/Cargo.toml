@@ -1,6 +1,6 @@
 [package]
 name = "novanexus"
-version = "0.1.0"
+version = "0.1.1"
 description = "NovaNexus - ServerManager für Gamer"
 authors = ["State-of-Economy"]
 license = "GPL-3.0"
@@ -34,7 +34,9 @@ russh = "0.45"
 russh-keys = "0.45"
 
 # OS Keyring integration (Windows Credential Manager / Gnome Keyring / KWallet)
-keyring = "3"
+# NOTE: platform backends are opt-in - without this feature, keyring silently
+# falls back to a non-persistent mock store on Windows.
+keyring = { version = "3", features = ["windows-native"] }
 
 # Encrypted local database (SQLCipher via bundled OpenSSL)
 rusqlite = { version = "0.31", features = ["bundled-sqlcipher"] }
