@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import "./App.css";
 import UpdateBanner from "./UpdateBanner";
 import AddServerDialog from "./AddServerDialog";
@@ -25,9 +26,11 @@ function App() {
   const [openInstanceId, setOpenInstanceId] = useState<string | null>(null);
   const [cpuHistory, setCpuHistory] = useState<Record<string, number[]>>({});
   const [ramHistory, setRamHistory] = useState<Record<string, number[]>>({});
+  const [appVersion, setAppVersion] = useState("");
 
   useEffect(() => {
     loadServers();
+    getVersion().then(setAppVersion).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -126,7 +129,7 @@ function App() {
             </div>
           </div>
 
-          <div className="nx-version">v0.1.0</div>
+          <div className="nx-version">{appVersion ? `v${appVersion}` : ""}</div>
         </div>
       </aside>
 
