@@ -130,15 +130,29 @@ function App() {
     }
   }
 
+  async function handleForget(instance: InstanceRecord) {
+    if (!confirm(`"${instance.display_name}" aus NovaNexus entfernen? Dienst und Dateien bleiben auf dem Server erhalten.`)) return;
+    setInstanceBusy(instance.id);
+    try {
+      await invoke("forget_instance", { instanceId: instance.id });
+      setInstances((prev) => prev.filter((i) => i.id !== instance.id));
+    } catch (err) {
+      setInstanceError(`${instance.display_name}: ${String(err)}`);
+    } finally {
+      setInstanceBusy(null);
+    }
+  }
+
   async function handleUninstall(instance: InstanceRecord) {
     if (!selectedServerId) return;
-    if (!confirm(`"${instance.display_name}" wirklich deinstallieren? Der Dienst wird gestoppt und aus NovaNexus entfernt.`)) return;
+    if (!confirm(`"${instance.display_name}" komplett deinstallieren? Dienst UND alle Dateien werden unwiderruflich vom Server gelöscht.`)) return;
     setInstanceBusy(instance.id);
     try {
       await invoke("delete_instance", {
         serverId: selectedServerId,
         instanceId: instance.id,
         unitName: instance.systemd_unit,
+        installPath: instance.install_path,
       });
       setInstances((prev) => prev.filter((i) => i.id !== instance.id));
     } catch (err) {
@@ -353,14 +367,25 @@ function App() {
                           </button>
                           <button onClick={() => setOpenInstanceId(instance.id)}>Verwalten</button>
                         </div>
-                        <button
-                          className="nx-btn-danger"
-                          style={{ marginTop: 6, width: "100%", fontSize: 12, background: "transparent", border: "1px solid var(--nx-border)", borderRadius: 6, padding: "6px 0" }}
-                          disabled={instanceBusy === instance.id}
-                          onClick={() => handleUninstall(instance)}
-                        >
-                          Deinstallieren
-                        </button>
+                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                          <button
+                            style={{ flex: 1, fontSize: 12, background: "transparent", border: "1px solid var(--nx-border)", borderRadius: 6, padding: "6px 0" }}
+                            disabled={instanceBusy === instance.id}
+                            onClick={() => handleForget(instance)}
+                            title="Aus NovaNexus entfernen, Dateien bleiben auf dem Server"
+                          >
+                            Entfernen
+                          </button>
+                          <button
+                            className="nx-btn-danger"
+                            style={{ flex: 1, fontSize: 12, background: "transparent", border: "1px solid var(--nx-border)", borderRadius: 6, padding: "6px 0" }}
+                            disabled={instanceBusy === instance.id}
+                            onClick={() => handleUninstall(instance)}
+                            title="Dienst + alle Dateien unwiderruflich vom Server löschen"
+                          >
+                            Deinstallieren
+                          </button>
+                        </div>
                       </div>
                     );
                   })}

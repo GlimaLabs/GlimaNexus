@@ -251,13 +251,55 @@ async fn get_instance_status(state: State<'_, AppState>, server_id: String, unit
     Ok(InstanceStatus { state, uptime_seconds })
 }
 
-/// Stops the instance's service, disables it, and removes it from the local list.
-/// Leaves the installed files on the server untouched.
+/// Guards against ever running `rm -rf` on something wider than a single instance's own
+/// directory - e.g. an empty/truncated path that resolves to the shared instances root.
+/// The path must be exactly `/home/gameserver/instances/<instance_id>` with a non-empty,
+/// slash-free, dot-free instance_id, so a malformed or missing id can never widen the blast
+/// radius to "delete everything installed on the server".
+fn validate_instance_path(install_path: &str, instance_id: &str) -> Result<(), String> {
+    const BASE: &str = "/home/gameserver/instances/";
+    if instance_id.is_empty() || instance_id.contains('/') || instance_id.contains("..") {
+        return Err(format!("Ungültige instance_id: {instance_id:?}"));
+    }
+    let expected = format!("{BASE}{instance_id}");
+    if install_path != expected {
+        return Err(format!(
+            "Install-Pfad passt nicht zur Instanz-ID, breche Löschung ab (erwartet {expected:?}, erhalten {install_path:?})"
+        ));
+    }
+    Ok(())
+}
+
+/// "Schlank" option: forgets the instance in NovaNexus only, leaving the service and its
+/// files untouched on the server (e.g. to keep a world/save for later, or re-add it as a
+/// server-side unit manually). Does not require an SSH connection.
 #[tauri::command]
-async fn delete_instance(state: State<'_, AppState>, server_id: String, instance_id: String, unit_name: String) -> Result<(), String> {
+fn forget_instance(state: State<'_, AppState>, instance_id: String) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_instance(&instance_id).map_err(|e| e.to_string())
+}
+
+/// "Radikal" option: fully uninstalls a game instance: stops + disables the service, removes its systemd
+/// unit file, reloads the daemon, deletes the installed files, and removes it from the
+/// local list - the server ends up exactly as if the instance had never existed.
+#[tauri::command]
+async fn delete_instance(
+    state: State<'_, AppState>,
+    server_id: String,
+    instance_id: String,
+    unit_name: String,
+    install_path: String,
+) -> Result<(), String> {
+    validate_instance_path(&install_path, &instance_id)?;
+
     if let Ok(mut session) = connect_to_server(&state, &server_id).await {
         let _ = provisioning::control_instance(&mut session, &unit_name, "stop").await;
         let _ = session.exec(&format!("sudo systemctl disable {unit_name}")).await;
+        let _ = session
+            .exec(&format!("sudo rm -f /etc/systemd/system/{unit_name}.service"))
+            .await;
+        let _ = session.exec("sudo systemctl daemon-reload").await;
+        let _ = session.exec(&format!("sudo rm -rf {install_path}")).await;
     }
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.delete_instance(&instance_id).map_err(|e| e.to_string())
@@ -315,6 +357,7 @@ pub fn run() {
             control_instance,
             get_instance_status,
             delete_instance,
+            forget_instance,
             stream_instance_logs,
         ])
         .run(tauri::generate_context!())
