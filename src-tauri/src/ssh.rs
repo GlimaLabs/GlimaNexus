@@ -32,9 +32,22 @@ pub struct SshSession {
 
 impl SshSession {
     pub async fn connect_password(host: &str, port: u16, username: &str, password: &str) -> Result<Self> {
-        tokio::time::timeout(CONNECT_TIMEOUT, Self::connect_password_inner(host, port, username, password))
-            .await
-            .map_err(|_| anyhow!("Zeitüberschreitung beim Verbindungsaufbau (Server nicht erreichbar?)"))?
+        // Fresh TCP connects sometimes get an immediate "connection refused" through
+        // transient local network hiccups (e.g. WSL2's localhost port-forwarding relay
+        // blipping) even though the remote is fine a moment later - a couple of quick
+        // retries absorb that instead of failing the whole action on a one-off glitch.
+        let mut last_err = None;
+        for attempt in 0..3 {
+            if attempt > 0 {
+                tokio::time::sleep(Duration::from_millis(400)).await;
+            }
+            match tokio::time::timeout(CONNECT_TIMEOUT, Self::connect_password_inner(host, port, username, password)).await {
+                Ok(Ok(session)) => return Ok(session),
+                Ok(Err(e)) => last_err = Some(e),
+                Err(_) => last_err = Some(anyhow!("Zeitüberschreitung beim Verbindungsaufbau (Server nicht erreichbar?)")),
+            }
+        }
+        Err(last_err.unwrap_or_else(|| anyhow!("Verbindung fehlgeschlagen")))
     }
 
     async fn connect_password_inner(host: &str, port: u16, username: &str, password: &str) -> Result<Self> {
