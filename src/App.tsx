@@ -93,6 +93,9 @@ function App() {
           setStats((prev) => ({ ...prev, [server.id]: result }));
           setCpuHistory((prev) => ({ ...prev, [server.id]: [...(prev[server.id] ?? []).slice(-29), result.cpu_percent] }));
           setRamHistory((prev) => ({ ...prev, [server.id]: [...(prev[server.id] ?? []).slice(-29), result.ram_used_mb] }));
+          // A successful poll proves the connection is fine now - clear any stale
+          // connection error that may have shown up while the server was still booting.
+          setInstanceError("");
         })
         .catch(() => {});
     });
@@ -321,7 +324,18 @@ function App() {
               </div>
             </div>
 
-            {instanceError && <div className="nx-update-error">{instanceError}</div>}
+            {instanceError && (
+              <div className="nx-update-error" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <span>{instanceError}</span>
+                <button
+                  onClick={() => setInstanceError("")}
+                  style={{ background: "transparent", border: "none", color: "inherit", fontSize: 16, lineHeight: 1, cursor: "pointer" }}
+                  aria-label="Fehlermeldung schließen"
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
               <h3 style={{ margin: 0 }}>Installierte Gameserver</h3>
