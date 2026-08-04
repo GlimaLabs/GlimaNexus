@@ -19,8 +19,10 @@ export default function InstanceDetail({ serverId, instance, status, busy, cpuHi
   const [tab, setTab] = useState<"status" | "config" | "console">("status");
   const [lines, setLines] = useState<string[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [logAttempt, setLogAttempt] = useState(0);
+  const [logError, setLogError] = useState(false);
   const consoleRef = useRef<HTMLDivElement>(null);
-  const startedRef = useRef(false);
+  const startedForAttempt = useRef(-1);
 
   const isActive = status?.state === "active";
   const isFailed = status?.state === "failed";
@@ -28,8 +30,9 @@ export default function InstanceDetail({ serverId, instance, status, busy, cpuHi
   const statusLabel = isActive ? "Online" : isFailed ? "Fehler" : status ? "Gestoppt" : "Unbekannt";
 
   useEffect(() => {
-    if (tab !== "console" || startedRef.current) return;
-    startedRef.current = true;
+    if (tab !== "console" || startedForAttempt.current === logAttempt) return;
+    startedForAttempt.current = logAttempt;
+    setLogError(false);
 
     const channel = new Channel<LogEvent>();
     channel.onmessage = (event) => {
@@ -42,8 +45,16 @@ export default function InstanceDetail({ serverId, instance, status, busy, cpuHi
       serverId,
       unitName: instance.systemd_unit,
       onEvent: channel,
-    }).catch((err) => setLines((prev) => [...prev, `[Fehler] ${String(err)}`]));
-  }, [tab, serverId, instance.systemd_unit]);
+    }).catch((err) => {
+      setLines((prev) => [...prev, `[Fehler] ${String(err)}`]);
+      setLogError(true);
+    });
+  }, [tab, logAttempt, serverId, instance.systemd_unit]);
+
+  function retryLogs() {
+    setLines([]);
+    setLogAttempt((n) => n + 1);
+  }
 
   useEffect(() => {
     if (autoScroll && consoleRef.current) {
@@ -122,10 +133,17 @@ export default function InstanceDetail({ serverId, instance, status, busy, cpuHi
               <div key={i}>{line}</div>
             ))}
           </div>
-          <label style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
-            <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} /> Automatisch
-            scrollen
-          </label>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <label style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
+              <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} /> Automatisch
+              scrollen
+            </label>
+            {logError && (
+              <button onClick={retryLogs} style={{ fontSize: 12 }}>
+                ⟳ Erneut verbinden
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

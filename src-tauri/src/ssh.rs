@@ -14,21 +14,6 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// the remote host disappeared without a clean TCP close), a channel.wait() can hang forever.
 const EXEC_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Temporary diagnostic logging (v0.1.14) to track down real-world SSH connect slowness -
-/// appends to a fixed, known path so it can be inspected without instrumenting the whole
-/// app. Remove once the root cause is confirmed and fixed.
-fn debug_log(msg: &str) {
-    use std::io::Write;
-    let line = format!("[{}] {msg}\n", chrono::Local::now().format("%H:%M:%S%.3f"));
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(std::env::temp_dir().join("novanexus_ssh_debug.log"))
-    {
-        let _ = f.write_all(line.as_bytes());
-    }
-}
-
 struct ClientHandler;
 
 #[async_trait::async_trait]
@@ -56,37 +41,19 @@ impl SshSession {
             if attempt > 0 {
                 tokio::time::sleep(Duration::from_millis(400)).await;
             }
-            let attempt_start = std::time::Instant::now();
-            let result = tokio::time::timeout(CONNECT_TIMEOUT, Self::connect_password_inner(host, port, username, password)).await;
-            match result {
-                Ok(Ok(session)) => {
-                    debug_log(&format!("attempt {attempt}: SUCCESS after {:?}", attempt_start.elapsed()));
-                    return Ok(session);
-                }
-                Ok(Err(e)) => {
-                    debug_log(&format!("attempt {attempt}: FAILED after {:?}: {e}", attempt_start.elapsed()));
-                    last_err = Some(e);
-                }
-                Err(_) => {
-                    debug_log(&format!("attempt {attempt}: TIMED OUT after {:?}", attempt_start.elapsed()));
-                    last_err = Some(anyhow!("Zeitüberschreitung beim Verbindungsaufbau (Server nicht erreichbar?)"));
-                }
+            match tokio::time::timeout(CONNECT_TIMEOUT, Self::connect_password_inner(host, port, username, password)).await {
+                Ok(Ok(session)) => return Ok(session),
+                Ok(Err(e)) => last_err = Some(e),
+                Err(_) => last_err = Some(anyhow!("Zeitüberschreitung beim Verbindungsaufbau (Server nicht erreichbar?)")),
             }
         }
         Err(last_err.unwrap_or_else(|| anyhow!("Verbindung fehlgeschlagen")))
     }
 
     async fn connect_password_inner(host: &str, port: u16, username: &str, password: &str) -> Result<Self> {
-        let t0 = std::time::Instant::now();
         let config = Arc::new(client::Config::default());
         let mut handle = client::connect(config, (host, port), ClientHandler).await?;
-        let t_connect = t0.elapsed();
         let authenticated = handle.authenticate_password(username, password).await?;
-        let t_auth = t0.elapsed();
-        debug_log(&format!(
-            "connect_password: tcp+kex={t_connect:?} auth_total={t_auth:?} (auth_only={:?})",
-            t_auth.saturating_sub(t_connect)
-        ));
         if !authenticated {
             return Err(anyhow!("SSH-Authentifizierung fehlgeschlagen"));
         }

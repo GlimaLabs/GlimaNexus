@@ -1,6 +1,6 @@
 [package]
 name = "novanexus"
-version = "0.1.14"
+version = "0.1.15"
 description = "NovaNexus - ServerManager für Gamer"
 authors = ["State-of-Economy"]
 license = "GPL-3.0"

@@ -87,8 +87,8 @@ function App() {
   }
 
   async function pollHardwareStats() {
-    servers.forEach((server) => {
-      invoke<HardwareStats>("get_hardware_stats", { serverId: server.id })
+    await Promise.all(servers.map((server) => {
+      return invoke<HardwareStats>("get_hardware_stats", { serverId: server.id })
         .then((result) => {
           setStats((prev) => ({ ...prev, [server.id]: result }));
           setCpuHistory((prev) => ({ ...prev, [server.id]: [...(prev[server.id] ?? []).slice(-29), result.cpu_percent] }));
@@ -98,7 +98,7 @@ function App() {
           setInstanceError("");
         })
         .catch(() => {});
-    });
+    }));
   }
 
   useEffect(() => {
@@ -313,10 +313,10 @@ function App() {
               </span>
               <div className="nx-server-header-actions">
                 <button disabled={serverBusy} onClick={handleReload}>
-                  ⟳ Neu laden
+                  {serverBusy ? <span className="nx-spinner" /> : "⟳ "}Neu laden
                 </button>
                 <button disabled={serverBusy} onClick={handleRebootServer}>
-                  ⏻ Neustarten
+                  {serverBusy ? <span className="nx-spinner" /> : "⏻ "}Neustarten
                 </button>
                 <button className="nx-btn-danger" disabled={serverBusy} onClick={handleDisconnectServer}>
                   ⏏ Trennen
