@@ -958,6 +958,45 @@ async fn delete_backup(state: State<'_, AppState>, server_id: String, instance_i
     Ok(())
 }
 
+/// Module D: restores a backup, completely replacing the instance's current install directory
+/// contents with the archive's. Destructive - the frontend must confirm with the user before
+/// calling this, same as delete_instance. Stops the service first (extracting into a running
+/// game's files would corrupt it), wipes the directory, extracts, restarts.
+#[tauri::command]
+async fn restore_backup(
+    state: State<'_, AppState>,
+    server_id: String,
+    instance_id: String,
+    install_path: String,
+    unit_name: String,
+    filename: String,
+) -> Result<(), String> {
+    validate_instance_path(&install_path, &instance_id)?;
+    validate_backup_filename(&filename)?;
+    let backup_path = format!("/home/gameserver/backups/{instance_id}/{filename}");
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+
+    let _ = provisioning::control_instance(session, &unit_name, "stop").await;
+
+    session
+        .exec(&format!(
+            "sudo -u gameserver bash -c \"find {} -mindepth 1 -delete && tar -xzf {} -C {}\"",
+            games::shell_single_quote(&install_path),
+            games::shell_single_quote(&backup_path),
+            games::shell_single_quote(&install_path)
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    provisioning::control_instance(session, &unit_name, "start")
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 /// Module C: streams `journalctl -fu <unit>` live, line-by-line, to the frontend via a Tauri
 /// Channel. Runs as a detached background task so the command returns immediately and the
 /// UI thread is never blocked, even while the remote log keeps following indefinitely.
@@ -1028,6 +1067,7 @@ pub fn run() {
             list_backups,
             download_backup,
             delete_backup,
+            restore_backup,
             stream_instance_logs,
         ])
         .run(tauri::generate_context!())

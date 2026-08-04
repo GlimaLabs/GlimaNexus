@@ -160,6 +160,30 @@ export default function InstanceDetail({
     }
   }
 
+  async function restoreBackup(name: string) {
+    if (
+      !confirm(
+        `Backup "${name}" wiederherstellen? Der aktuelle Stand von "${instance.display_name}" wird dabei komplett überschrieben und der Server kurz neugestartet. Das kann nicht rückgängig gemacht werden.`
+      )
+    )
+      return;
+    setBackupBusyName(name);
+    setBackupError("");
+    try {
+      await invoke("restore_backup", {
+        serverId,
+        instanceId: instance.id,
+        installPath: instance.install_path,
+        unitName: instance.systemd_unit,
+        filename: name,
+      });
+    } catch (err) {
+      setBackupError(String(err));
+    } finally {
+      setBackupBusyName(null);
+    }
+  }
+
   function formatBackupSize(bytes: number): string {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -447,6 +471,9 @@ export default function InstanceDetail({
                   <div style={{ display: "flex", gap: 8 }}>
                     <button className="nx-btn-start" disabled={backupBusyName === b.name} onClick={() => downloadBackup(b.name)}>
                       {backupBusyName === b.name ? "…" : "Herunterladen"}
+                    </button>
+                    <button className="nx-btn-restart" disabled={backupBusyName === b.name} onClick={() => restoreBackup(b.name)}>
+                      Wiederherstellen
                     </button>
                     <button className="nx-btn-stop" disabled={backupBusyName === b.name} onClick={() => deleteBackup(b.name)}>
                       Löschen
