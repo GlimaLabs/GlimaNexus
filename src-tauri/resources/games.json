@@ -15,7 +15,18 @@
       },
       "start_command": "java -Xmx{ram_limit_mb}M -Xms1024M -jar paper.jar nogui",
       "default_cpu_limit_percent": 200,
-      "default_ram_limit_mb": 4096
+      "default_ram_limit_mb": 4096,
+      "config": {
+        "file": "server.properties",
+        "format": "properties",
+        "fields": [
+          { "key": "motd", "label": "Server Name (MOTD)", "type": "text", "default": "A Minecraft Server" },
+          { "key": "max-players", "label": "Spieler Slots", "type": "number", "default": "20" },
+          { "key": "server-port", "label": "Port", "type": "number", "default": "25565" },
+          { "key": "difficulty", "label": "Schwierigkeit", "type": "text", "default": "easy" },
+          { "key": "white-list", "label": "Whitelist aktiv", "type": "bool", "default": "false" }
+        ]
+      }
     },
     {
       "id": "palworld",
@@ -86,6 +97,15 @@
         ]
       },
       "start_command": "./bin/x64/factorio --start-server saves/server.zip --server-settings server-settings.json",
+      "config": {
+        "file": "server-settings.json",
+        "format": "json",
+        "fields": [
+          { "key": "name", "label": "Server Name", "type": "text", "default": "NovaNexus Factorio" },
+          { "key": "max_players", "label": "Spieler Slots (0 = unbegrenzt)", "type": "number", "default": "0" },
+          { "key": "game_password", "label": "Passwort", "type": "password", "default": "" }
+        ]
+      },
       "default_cpu_limit_percent": 150,
       "default_ram_limit_mb": 2048
     },

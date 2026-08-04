@@ -855,6 +855,37 @@
   border-radius: 999px;
 }
 
+.nx-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 480px;
+}
+
+.nx-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--nx-text-muted);
+}
+
+.nx-config-field input[type="text"],
+.nx-config-field input[type="number"],
+.nx-config-field input[type="password"] {
+  background: var(--nx-panel-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  padding: 8px 10px;
+  color: var(--nx-text);
+  font-size: 13px;
+}
+
+.nx-config-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 .nx-console {
   background: #05080c;
   border: 1px solid var(--nx-border);

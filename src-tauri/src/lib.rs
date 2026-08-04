@@ -330,6 +330,71 @@ async fn install_game(
     Ok(record)
 }
 
+/// Module B: reads a game instance's config file over SSH and extracts the values for the
+/// fields declared in its template's config schema (falling back to defaults when a field
+/// or the file itself doesn't exist yet, e.g. right after install).
+#[tauri::command]
+async fn get_instance_config(
+    state: State<'_, AppState>,
+    server_id: String,
+    game_id: String,
+    install_path: String,
+) -> Result<HashMap<String, String>, String> {
+    let template = games::find_template(&game_id).ok_or_else(|| format!("Unbekanntes Spiel: {game_id}"))?;
+    let schema = template
+        .config
+        .ok_or_else(|| "Für dieses Spiel gibt es noch keine Konfigurationsoberfläche".to_string())?;
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    let path = format!("{install_path}/{}", schema.file);
+    let raw = session
+        .exec(&format!("cat {} 2>/dev/null", games::shell_single_quote(&path)))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(games::parse_config(&schema, &raw))
+}
+
+/// Module B: writes updated field values back into a game instance's config file, preserving
+/// unrelated content, so the game's own config format doesn't get clobbered.
+#[tauri::command]
+async fn save_instance_config(
+    state: State<'_, AppState>,
+    server_id: String,
+    game_id: String,
+    install_path: String,
+    values: HashMap<String, String>,
+) -> Result<(), String> {
+    let template = games::find_template(&game_id).ok_or_else(|| format!("Unbekanntes Spiel: {game_id}"))?;
+    let schema = template
+        .config
+        .ok_or_else(|| "Für dieses Spiel gibt es noch keine Konfigurationsoberfläche".to_string())?;
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    let path = format!("{install_path}/{}", schema.file);
+    let quoted_path = games::shell_single_quote(&path);
+    let raw = session
+        .exec(&format!("cat {quoted_path} 2>/dev/null"))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let rendered = games::render_config(&schema, &raw, &values);
+    // Pipe the rendered content in via stdin instead of interpolating it into the command
+    // string, so config values containing quotes/`$`/backticks can never break out of the
+    // shell command (same pattern as ensure_passwordless_sudo's stdin-piped password).
+    session
+        .exec_with_stdin(
+            &format!("sudo -u gameserver tee {quoted_path} > /dev/null"),
+            rendered.as_bytes(),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 /// Module C: start/stop/restart a game instance via systemd.
 #[tauri::command]
 async fn control_instance(state: State<'_, AppState>, server_id: String, unit_name: String, action: String) -> Result<String, String> {
@@ -498,6 +563,8 @@ pub fn run() {
             list_games,
             list_instances,
             install_game,
+            get_instance_config,
+            save_instance_config,
             control_instance,
             get_instance_status,
             delete_instance,

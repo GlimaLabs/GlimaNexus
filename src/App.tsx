@@ -67,6 +67,7 @@ function App() {
   const [serverBusy, setServerBusy] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [gameSubtitles, setGameSubtitles] = useState<Record<string, string>>({});
+  const [gameTemplates, setGameTemplates] = useState<Record<string, GameTemplate>>({});
   const [localStats, setLocalStats] = useState<LocalSystemStats | null>(null);
   const [localCpuHistory, setLocalCpuHistory] = useState<number[]>([]);
 
@@ -86,7 +87,10 @@ function App() {
 
   useEffect(() => {
     invoke<GameTemplate[]>("list_games")
-      .then((games) => setGameSubtitles(Object.fromEntries(games.map((g) => [g.id, g.subtitle]))))
+      .then((games) => {
+        setGameSubtitles(Object.fromEntries(games.map((g) => [g.id, g.subtitle])));
+        setGameTemplates(Object.fromEntries(games.map((g) => [g.id, g])));
+      })
       .catch(() => {});
   }, []);
 
@@ -543,6 +547,7 @@ function App() {
                     diskUsedGb={selectedStats?.disk_used_gb}
                     diskTotalGb={selectedStats?.disk_total_gb}
                     subtitle={gameSubtitles[instance.game_id]}
+                    configSchema={gameTemplates[instance.game_id]?.config}
                     onAction={(action) => runInstanceAction(instance, action)}
                     onClose={() => setOpenInstanceId(null)}
                   />

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
-import type { InstanceRecord, InstanceStatus } from "./types";
+import type { ConfigSchema, InstanceRecord, InstanceStatus } from "./types";
 
 type LogEvent = { event: "line"; text: string } | { event: "closed" };
 
@@ -14,6 +14,7 @@ type Props = {
   diskUsedGb?: number;
   diskTotalGb?: number;
   subtitle?: string;
+  configSchema?: ConfigSchema;
   onAction: (action: "start" | "stop" | "restart") => void;
   onClose: () => void;
 };
@@ -28,10 +29,16 @@ export default function InstanceDetail({
   diskUsedGb,
   diskTotalGb,
   subtitle,
+  configSchema,
   onAction,
   onClose,
 }: Props) {
   const [tab, setTab] = useState<"status" | "config" | "console">("status");
+  const [configValues, setConfigValues] = useState<Record<string, string>>({});
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configError, setConfigError] = useState("");
+  const [configSaved, setConfigSaved] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [logAttempt, setLogAttempt] = useState(0);
@@ -87,6 +94,39 @@ export default function InstanceDetail({
   function retryLogs() {
     setLines([]);
     setLogAttempt((n) => n + 1);
+  }
+
+  useEffect(() => {
+    if (tab !== "config" || !configSchema) return;
+    setConfigLoading(true);
+    setConfigError("");
+    invoke<Record<string, string>>("get_instance_config", {
+      serverId,
+      gameId: instance.game_id,
+      installPath: instance.install_path,
+    })
+      .then(setConfigValues)
+      .catch((err) => setConfigError(String(err)))
+      .finally(() => setConfigLoading(false));
+  }, [tab, configSchema, serverId, instance.game_id, instance.install_path]);
+
+  async function saveConfig() {
+    setConfigSaving(true);
+    setConfigError("");
+    setConfigSaved(false);
+    try {
+      await invoke("save_instance_config", {
+        serverId,
+        gameId: instance.game_id,
+        installPath: instance.install_path,
+        values: configValues,
+      });
+      setConfigSaved(true);
+    } catch (err) {
+      setConfigError(String(err));
+    } finally {
+      setConfigSaving(false);
+    }
   }
 
   useEffect(() => {
@@ -223,9 +263,50 @@ export default function InstanceDetail({
       )}
 
       {tab === "config" && (
-        <p style={{ color: "var(--nx-text-muted)" }}>
-          Konfigurationseditor folgt (Server-Properties/Config-Dateien direkt bearbeiten).
-        </p>
+        <div className="nx-config-form">
+          {!configSchema && (
+            <p style={{ color: "var(--nx-text-muted)" }}>
+              Für {instance.display_name} gibt es noch keine Konfigurationsoberfläche. Folgt in einem späteren Update.
+            </p>
+          )}
+          {configSchema && configLoading && (
+            <p style={{ color: "var(--nx-text-muted)" }}>Lade Konfiguration…</p>
+          )}
+          {configSchema && !configLoading && (
+            <>
+              {configSchema.fields.map((field) => (
+                <label key={field.key} className="nx-config-field">
+                  <span className="nx-config-label">{field.label}</span>
+                  {field.type === "bool" ? (
+                    <input
+                      type="checkbox"
+                      checked={configValues[field.key] === "true"}
+                      onChange={(e) =>
+                        setConfigValues((prev) => ({ ...prev, [field.key]: e.target.checked ? "true" : "false" }))
+                      }
+                    />
+                  ) : (
+                    <input
+                      type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                      value={configValues[field.key] ?? ""}
+                      onChange={(e) => setConfigValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    />
+                  )}
+                </label>
+              ))}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+                <button className="nx-btn-restart" disabled={configSaving} onClick={saveConfig}>
+                  {configSaving ? "Speichert…" : "Speichern"}
+                </button>
+                {configSaved && <span style={{ color: "var(--nx-success)", fontSize: 12 }}>Gespeichert ✓</span>}
+                <span style={{ color: "var(--nx-text-muted)", fontSize: 12 }}>
+                  Wird beim nächsten Neustart des Servers wirksam.
+                </span>
+              </div>
+              {configError && <p style={{ color: "var(--nx-danger)", fontSize: 12 }}>{configError}</p>}
+            </>
+          )}
+        </div>
       )}
 
       {tab === "console" && (

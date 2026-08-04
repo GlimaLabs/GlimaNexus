@@ -22,6 +22,19 @@ export type LocalSystemStats = {
   net_down_kbps: number;
 };
 
+export type ConfigField = {
+  key: string;
+  label: string;
+  type: "text" | "number" | "password" | "bool";
+  default: string;
+};
+
+export type ConfigSchema = {
+  file: string;
+  format: string;
+  fields: ConfigField[];
+};
+
 export type GameTemplate = {
   id: string;
   name: string;
@@ -31,6 +44,7 @@ export type GameTemplate = {
   start_command: string;
   default_cpu_limit_percent: number;
   default_ram_limit_mb: number;
+  config?: ConfigSchema;
 };
 
 export type InstanceRecord = {
