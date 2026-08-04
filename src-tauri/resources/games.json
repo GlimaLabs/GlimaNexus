@@ -34,6 +34,132 @@
       "start_command": "./PalServer.sh -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS",
       "default_cpu_limit_percent": 200,
       "default_ram_limit_mb": 8192
+    },
+    {
+      "id": "7dtd",
+      "name": "7 Days to Die",
+      "subtitle": "Dedicated Server",
+      "icon": "7daystodie.png",
+      "requires": ["steamcmd"],
+      "install": {
+        "type": "steamcmd",
+        "app_id": 294420,
+        "steps": [
+          "mkdir -p /home/gameserver/instances/{instance_id}",
+          "steamcmd +force_install_dir /home/gameserver/instances/{instance_id} +login anonymous +app_update 294420 validate +quit"
+        ]
+      },
+      "start_command": "./7DaysToDieServer.x86_64 -logfile /dev/stdout -quit -batchmode -nographics -dedicated -configfile=serverconfig.xml",
+      "default_cpu_limit_percent": 200,
+      "default_ram_limit_mb": 6144
+    },
+    {
+      "id": "dayz",
+      "name": "DayZ",
+      "subtitle": "Dedicated Server",
+      "icon": "dayz.png",
+      "requires": ["steamcmd"],
+      "install": {
+        "type": "steamcmd",
+        "app_id": 223350,
+        "steps": [
+          "mkdir -p /home/gameserver/instances/{instance_id}",
+          "steamcmd +force_install_dir /home/gameserver/instances/{instance_id} +login anonymous +app_update 223350 validate +quit"
+        ]
+      },
+      "start_command": "./DayZServer -config=serverDZ.cfg -port=2302",
+      "default_cpu_limit_percent": 200,
+      "default_ram_limit_mb": 8192
+    },
+    {
+      "id": "factorio",
+      "name": "Factorio",
+      "subtitle": "Headless Server",
+      "icon": "factorio.png",
+      "requires": [],
+      "install": {
+        "type": "direct-download",
+        "steps": [
+          "cd /home/gameserver/instances/{instance_id} && curl -L -o factorio.tar.xz \"https://factorio.com/get-download/stable/headless/linux64\" && tar -xJf factorio.tar.xz --strip-components=1 && rm factorio.tar.xz",
+          "mkdir -p /home/gameserver/instances/{instance_id}/saves && cd /home/gameserver/instances/{instance_id} && ./bin/x64/factorio --create saves/server.zip",
+          "echo '{\"name\":\"NovaNexus Factorio\",\"description\":\"\",\"tags\":[],\"max_players\":0,\"visibility\":{\"public\":false,\"lan\":true},\"username\":\"\",\"password\":\"\",\"token\":\"\",\"game_password\":\"\",\"require_user_verification\":true,\"max_upload_in_kilobytes_per_second\":0,\"max_upload_slots\":5,\"minimum_latency_in_ticks\":0,\"ignore_player_limit_for_returning_players\":false,\"allow_commands\":\"admins-only\",\"autosave_interval\":10,\"autosave_slots\":5,\"afk_autokick_interval\":0,\"auto_pause\":true,\"only_admins_can_pause_the_game\":true,\"autosave_only_on_server\":true}' > /home/gameserver/instances/{instance_id}/server-settings.json"
+        ]
+      },
+      "start_command": "./bin/x64/factorio --start-server saves/server.zip --server-settings server-settings.json",
+      "default_cpu_limit_percent": 150,
+      "default_ram_limit_mb": 2048
+    },
+    {
+      "id": "satisfactory",
+      "name": "Satisfactory",
+      "subtitle": "Dedicated Server",
+      "icon": "satisfactory.png",
+      "requires": ["steamcmd"],
+      "install": {
+        "type": "steamcmd",
+        "app_id": 1690800,
+        "steps": [
+          "mkdir -p /home/gameserver/instances/{instance_id}",
+          "steamcmd +force_install_dir /home/gameserver/instances/{instance_id} +login anonymous +app_update 1690800 validate +quit"
+        ]
+      },
+      "start_command": "./FactoryServer.sh -unattended",
+      "default_cpu_limit_percent": 200,
+      "default_ram_limit_mb": 8192
+    },
+    {
+      "id": "scum",
+      "name": "SCUM",
+      "subtitle": "Dedicated Server",
+      "icon": "scum.png",
+      "requires": ["steamcmd"],
+      "install": {
+        "type": "steamcmd",
+        "app_id": 3792580,
+        "steps": [
+          "mkdir -p /home/gameserver/instances/{instance_id}",
+          "steamcmd +force_install_dir /home/gameserver/instances/{instance_id} +login anonymous +app_update 3792580 validate +quit"
+        ]
+      },
+      "start_command": "./SCUM/Binaries/Linux/SCUMServer.sh -log",
+      "default_cpu_limit_percent": 200,
+      "default_ram_limit_mb": 12288
+    },
+    {
+      "id": "valheim",
+      "name": "Valheim",
+      "subtitle": "Dedicated Server",
+      "icon": "valheim.png",
+      "requires": ["steamcmd"],
+      "install": {
+        "type": "steamcmd",
+        "app_id": 896660,
+        "steps": [
+          "mkdir -p /home/gameserver/instances/{instance_id}",
+          "steamcmd +force_install_dir /home/gameserver/instances/{instance_id} +login anonymous +app_update 896660 validate +quit"
+        ]
+      },
+      "start_command": "./valheim_server.x86_64 -name \"NovaNexus Server\" -port 2456 -world \"Dedicated\" -password \"changeme\" -nographics -batchmode -crossplay",
+      "default_cpu_limit_percent": 150,
+      "default_ram_limit_mb": 4096
+    },
+    {
+      "id": "vrising",
+      "name": "V Rising",
+      "subtitle": "Dedicated Server",
+      "icon": "vrising.png",
+      "requires": ["steamcmd"],
+      "install": {
+        "type": "steamcmd",
+        "app_id": 1829350,
+        "steps": [
+          "mkdir -p /home/gameserver/instances/{instance_id}",
+          "steamcmd +force_install_dir /home/gameserver/instances/{instance_id} +login anonymous +app_update 1829350 validate +quit"
+        ]
+      },
+      "start_command": "./VRisingServer.x86_64 -persistentDataPath ./save-data -serverName \"NovaNexus Server\"",
+      "default_cpu_limit_percent": 200,
+      "default_ram_limit_mb": 6144
     }
   ]
 }
