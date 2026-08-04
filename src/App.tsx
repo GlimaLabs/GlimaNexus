@@ -6,6 +6,7 @@ import UpdateBanner from "./UpdateBanner";
 import TitleBar from "./TitleBar";
 import AddServerDialog from "./AddServerDialog";
 import GameStoreDialog from "./GameStoreDialog";
+import PatchNotesDialog from "./PatchNotesDialog";
 import InstanceDetail from "./InstanceDetail";
 import novaNexusLogo from "./assets/novanexus_logo2.png";
 import GameIcon from "./GameIcon";
@@ -71,6 +72,7 @@ function App() {
   const [instanceVersions, setInstanceVersions] = useState<Record<string, VersionInfo>>({});
   const [updatingInstanceId, setUpdatingInstanceId] = useState<string | null>(null);
   const [installingGame, setInstallingGame] = useState<GameTemplate | null>(null);
+  const [showPatchNotes, setShowPatchNotes] = useState(false);
   const [localStats, setLocalStats] = useState<LocalSystemStats | null>(null);
   const [localCpuHistory, setLocalCpuHistory] = useState<number[]>([]);
 
@@ -106,7 +108,12 @@ function App() {
 
   useEffect(() => {
     loadServers();
-    getVersion().then(setAppVersion).catch(() => {});
+    getVersion().then((version) => {
+      setAppVersion(version);
+      const lastSeen = localStorage.getItem("nx-last-seen-version");
+      if (lastSeen && lastSeen !== version) setShowPatchNotes(true);
+      localStorage.setItem("nx-last-seen-version", version);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -380,7 +387,11 @@ function App() {
             </div>
           )}
 
-          <div className="nx-version">{appVersion ? `v${appVersion}` : ""}</div>
+          {appVersion && (
+            <button className="nx-version nx-version-btn" onClick={() => setShowPatchNotes(true)}>
+              v{appVersion}
+            </button>
+          )}
         </div>
       </aside>
 
@@ -675,6 +686,8 @@ function App() {
           onInstallDone={() => setInstallingGame(null)}
         />
       )}
+
+      {showPatchNotes && <PatchNotesDialog onClose={() => setShowPatchNotes(false)} />}
     </div>
   );
 }

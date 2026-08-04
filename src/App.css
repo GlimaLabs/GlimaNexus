@@ -195,6 +195,18 @@
   padding: 4px 8px;
 }
 
+.nx-version-btn {
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.nx-version-btn:hover {
+  color: var(--nx-accent);
+}
+
 /* Server list column */
 .nx-server-list {
   background: var(--nx-bg);
@@ -383,6 +395,45 @@
 
 .nx-store-modal {
   width: 560px;
+}
+
+.nx-patchnotes-modal {
+  width: 480px;
+  max-height: 80vh;
+}
+
+.nx-patchnotes-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nx-patchnotes-entry-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.nx-patchnotes-version {
+  font-weight: 600;
+  color: var(--nx-accent);
+}
+
+.nx-patchnotes-date {
+  font-size: 11px;
+  color: var(--nx-text-muted);
+}
+
+.nx-patchnotes-entry ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--nx-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .nx-game-grid {
