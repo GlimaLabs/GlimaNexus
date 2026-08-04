@@ -8,7 +8,7 @@ import AddServerDialog from "./AddServerDialog";
 import GameStoreDialog from "./GameStoreDialog";
 import InstanceDetail from "./InstanceDetail";
 import novaNexusLogo from "./assets/novanexus_logo2.png";
-import { gameIcon } from "./gameIcons";
+import GameIcon from "./GameIcon";
 import type { InstanceRecord, InstanceStatus, ServerRecord } from "./types";
 
 type HardwareStats = {
@@ -344,8 +344,9 @@ function App() {
                     return (
                       <div key={instance.id} className="nx-instance-card">
                         <div className="nx-instance-card-title">
-                          <span>
-                            {gameIcon(instance.game_id)} {instance.display_name}
+                          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <GameIcon gameId={instance.game_id} size={22} />
+                            {instance.display_name}
                           </span>
                           <label className="nx-toggle">
                             <input

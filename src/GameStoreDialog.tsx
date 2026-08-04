@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { GameTemplate, InstanceRecord } from "./types";
-import { gameIcon } from "./gameIcons";
+import GameIcon from "./GameIcon";
 
 type Props = {
   serverId: string;
@@ -47,7 +47,7 @@ export default function GameStoreDialog({ serverId, onClose, onInstalled }: Prop
           {games.map((game) => (
             <div key={game.id} className="nx-game-card">
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                <span style={{ fontSize: 22 }}>{gameIcon(game.id)}</span>
+                <GameIcon gameId={game.id} size={32} />
                 <span style={{ fontWeight: 600 }}>{game.name}</span>
               </div>
               <div style={{ color: "var(--nx-text-muted)", fontSize: 12, marginBottom: 10 }}>{game.subtitle}</div>
