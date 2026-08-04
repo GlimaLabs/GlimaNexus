@@ -16,6 +16,16 @@ pub struct ConfigField {
     #[serde(rename = "type")]
     pub field_type: String, // "text" | "number" | "password" | "bool"
     pub default: String,
+    /// Set to "tcp" or "udp" when this field controls the game's listen port - after saving,
+    /// the new port gets opened in the server's firewall the same way the install-time ports do.
+    #[serde(default)]
+    pub opens_port_protocol: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PortSpec {
+    pub port: u16,
+    pub protocol: String, // "tcp" | "udp"
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -40,6 +50,9 @@ pub struct GameTemplate {
     pub default_ram_limit_mb: u32,
     #[serde(default)]
     pub config: Option<ConfigSchema>,
+    /// Ports that need to be opened in the server's firewall for the game to be reachable.
+    #[serde(default)]
+    pub ports: Vec<PortSpec>,
 }
 
 #[derive(Deserialize)]

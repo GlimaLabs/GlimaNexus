@@ -22,11 +22,12 @@
         "fields": [
           { "key": "motd", "label": "Server Name (MOTD)", "type": "text", "default": "A Minecraft Server" },
           { "key": "max-players", "label": "Spieler Slots", "type": "number", "default": "20" },
-          { "key": "server-port", "label": "Port", "type": "number", "default": "25565" },
+          { "key": "server-port", "label": "Port", "type": "number", "default": "25565", "opens_port_protocol": "tcp" },
           { "key": "difficulty", "label": "Schwierigkeit", "type": "text", "default": "easy" },
           { "key": "white-list", "label": "Whitelist aktiv", "type": "bool", "default": "false" }
         ]
-      }
+      },
+      "ports": [{ "port": 25565, "protocol": "tcp" }]
     },
     {
       "id": "palworld",
@@ -44,7 +45,8 @@
       },
       "start_command": "./PalServer.sh -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS",
       "default_cpu_limit_percent": 200,
-      "default_ram_limit_mb": 8192
+      "default_ram_limit_mb": 8192,
+      "ports": [{ "port": 8211, "protocol": "udp" }]
     },
     {
       "id": "7dtd",
@@ -62,7 +64,11 @@
       },
       "start_command": "./7DaysToDieServer.x86_64 -logfile /dev/stdout -quit -batchmode -nographics -dedicated -configfile=serverconfig.xml",
       "default_cpu_limit_percent": 200,
-      "default_ram_limit_mb": 6144
+      "default_ram_limit_mb": 6144,
+      "ports": [
+        { "port": 26900, "protocol": "tcp" },
+        { "port": 26900, "protocol": "udp" }
+      ]
     },
     {
       "id": "dayz",
@@ -80,7 +86,8 @@
       },
       "start_command": "./DayZServer -config=serverDZ.cfg -port=2302",
       "default_cpu_limit_percent": 200,
-      "default_ram_limit_mb": 8192
+      "default_ram_limit_mb": 8192,
+      "ports": [{ "port": 2302, "protocol": "udp" }]
     },
     {
       "id": "factorio",
@@ -107,7 +114,8 @@
         ]
       },
       "default_cpu_limit_percent": 150,
-      "default_ram_limit_mb": 2048
+      "default_ram_limit_mb": 2048,
+      "ports": [{ "port": 34197, "protocol": "udp" }]
     },
     {
       "id": "satisfactory",
@@ -125,7 +133,8 @@
       },
       "start_command": "./FactoryServer.sh -unattended",
       "default_cpu_limit_percent": 200,
-      "default_ram_limit_mb": 8192
+      "default_ram_limit_mb": 8192,
+      "ports": [{ "port": 7777, "protocol": "udp" }]
     },
     {
       "id": "scum",
@@ -143,7 +152,11 @@
       },
       "start_command": "./SCUM/Binaries/Linux/SCUMServer.sh -log",
       "default_cpu_limit_percent": 200,
-      "default_ram_limit_mb": 12288
+      "default_ram_limit_mb": 12288,
+      "ports": [
+        { "port": 7042, "protocol": "tcp" },
+        { "port": 7042, "protocol": "udp" }
+      ]
     },
     {
       "id": "valheim",
@@ -161,7 +174,8 @@
       },
       "start_command": "./valheim_server.x86_64 -name \"GlimaNexus Server\" -port 2456 -world \"Dedicated\" -password \"changeme\" -nographics -batchmode -crossplay",
       "default_cpu_limit_percent": 150,
-      "default_ram_limit_mb": 4096
+      "default_ram_limit_mb": 4096,
+      "ports": [{ "port": 2456, "protocol": "udp" }]
     },
     {
       "id": "vrising",
@@ -179,7 +193,11 @@
       },
       "start_command": "./VRisingServer.x86_64 -persistentDataPath ./save-data -serverName \"GlimaNexus Server\"",
       "default_cpu_limit_percent": 200,
-      "default_ram_limit_mb": 6144
+      "default_ram_limit_mb": 6144,
+      "ports": [
+        { "port": 9876, "protocol": "udp" },
+        { "port": 9877, "protocol": "udp" }
+      ]
     }
   ]
 }

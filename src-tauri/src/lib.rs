@@ -314,6 +314,17 @@ async fn install_game(
         .await
         .map_err(|e| e.to_string())?;
 
+    // Open the game's port(s) in whatever firewall is active, so the user never has to know
+    // firewalls exist. Best-effort: a single port failing to open shouldn't fail the whole
+    // install (server is already up - worst case the user needs to open it manually).
+    if !template.ports.is_empty() {
+        if let Ok(family) = provisioning::detect_distro_family(session).await {
+            for p in &template.ports {
+                let _ = provisioning::open_port(session, family, p.port, &p.protocol).await;
+            }
+        }
+    }
+
     let record = InstanceRecord {
         id: instance_id,
         server_id,
@@ -488,6 +499,20 @@ async fn save_instance_config(
         )
         .await
         .map_err(|e| e.to_string())?;
+
+    // If a field controls the game's listen port and it changed, open the new port too -
+    // best-effort, doesn't fail the save if the firewall step has trouble.
+    for field in &schema.fields {
+        if let Some(protocol) = &field.opens_port_protocol {
+            if let Some(new_value) = values.get(&field.key) {
+                if let Ok(port) = new_value.parse::<u16>() {
+                    if let Ok(family) = provisioning::detect_distro_family(session).await {
+                        let _ = provisioning::open_port(session, family, port, protocol).await;
+                    }
+                }
+            }
+        }
+    }
 
     Ok(())
 }

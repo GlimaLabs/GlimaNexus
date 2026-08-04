@@ -140,6 +140,39 @@ pub async fn install_systemd_unit(ssh: &mut SshSession, unit_name: &str, unit_co
     Ok(())
 }
 
+/// Opens a port in whichever firewall manager is actually active on the server, so a freshly
+/// installed (or reconfigured) game is reachable without the user ever touching a firewall
+/// themselves. Best-effort by design: if no supported firewall is active (very common on
+/// Debian/Ubuntu cloud images - no local firewall at all, filtering happens at the provider's
+/// network edge instead), this is a silent no-op rather than a failure, since there's nothing
+/// wrong to report - the port simply isn't blocked locally in the first place.
+pub async fn open_port(ssh: &mut SshSession, family: DistroFamily, port: u16, protocol: &str) -> Result<()> {
+    match family {
+        DistroFamily::Debian => {
+            // `ufw` ships inactive-by-default on most Debian/Ubuntu images; only touch it if
+            // the admin already turned it on, otherwise leave it alone entirely.
+            let status = ssh.exec("sudo ufw status 2>/dev/null").await.unwrap_or_default();
+            if status.contains("Status: active") {
+                ssh.exec(&format!("sudo ufw allow {port}/{protocol}")).await?;
+            }
+        }
+        DistroFamily::Fedora => {
+            // firewalld is active by default on Fedora/RHEL-family systems.
+            let status = ssh
+                .exec("systemctl is-active firewalld 2>/dev/null")
+                .await
+                .unwrap_or_default();
+            if status.trim() == "active" {
+                ssh.exec(&format!(
+                    "sudo firewall-cmd --permanent --add-port={port}/{protocol} && sudo firewall-cmd --reload"
+                ))
+                .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub async fn control_instance(ssh: &mut SshSession, unit_name: &str, action: &str) -> Result<String> {
     // action: "start" | "stop" | "restart"
     ssh.exec(&format!("sudo systemctl {action} {unit_name}")).await
