@@ -28,6 +28,8 @@ pub struct HardwareStats {
     pub cpu_percent: f32,
     pub ram_used_mb: u64,
     pub ram_total_mb: u64,
+    pub disk_used_gb: u64,
+    pub disk_total_gb: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -162,11 +164,12 @@ async fn get_hardware_stats(state: State<'_, AppState>, server_id: String) -> Re
     let result = async {
         let cpu_raw = session.exec("top -bn1 | grep 'Cpu(s)' | awk '{print $2}'").await?;
         let mem_raw = session.exec("free -m | awk '/Mem:/ {print $3\" \"$2}'").await?;
-        anyhow::Ok((cpu_raw, mem_raw))
+        let disk_raw = session.exec("df -BG / | awk 'NR==2 {gsub(\"G\",\"\"); print $3\" \"$2}'").await?;
+        anyhow::Ok((cpu_raw, mem_raw, disk_raw))
     }
     .await;
 
-    let (cpu_raw, mem_raw) = match result {
+    let (cpu_raw, mem_raw, disk_raw) = match result {
         Ok(v) => v,
         Err(e) => {
             *guard = None;
@@ -178,8 +181,11 @@ async fn get_hardware_stats(state: State<'_, AppState>, server_id: String) -> Re
     let mut mem_parts = mem_raw.trim().split_whitespace();
     let ram_used_mb = mem_parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
     let ram_total_mb = mem_parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let mut disk_parts = disk_raw.trim().split_whitespace();
+    let disk_used_gb = disk_parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let disk_total_gb = disk_parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
 
-    Ok(HardwareStats { cpu_percent, ram_used_mb, ram_total_mb })
+    Ok(HardwareStats { cpu_percent, ram_used_mb, ram_total_mb, disk_used_gb, disk_total_gb })
 }
 
 /// Module B: lists the games available in the bundled template database.

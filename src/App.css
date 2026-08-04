@@ -203,6 +203,35 @@
   margin-bottom: 8px;
 }
 
+.nx-server-meter-row {
+  display: flex;
+  gap: 10px;
+}
+
+.nx-server-meter {
+  flex: 1;
+  font-size: 11px;
+  color: var(--nx-text-muted);
+}
+
+.nx-server-meter span {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.nx-meter-track {
+  height: 4px;
+  background: var(--nx-panel-alt);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.nx-meter-fill {
+  height: 100%;
+  background: var(--nx-accent);
+  border-radius: 999px;
+}
+
 /* Main panel */
 .nx-main {
   padding: 24px;
@@ -363,8 +392,9 @@
 }
 
 .nx-conn-pill.connected {
-  color: var(--nx-accent);
-  border-color: var(--nx-accent);
+  color: var(--nx-success);
+  border-color: var(--nx-success);
+  background: var(--nx-success-soft);
 }
 
 .nx-conn-pill .nx-status-dot {
@@ -395,6 +425,48 @@
 
 .nx-btn-danger:hover {
   border-color: var(--nx-danger) !important;
+}
+
+.nx-btn-stop,
+.nx-btn-start,
+.nx-btn-restart {
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.nx-btn-stop {
+  background: var(--nx-danger-soft);
+  border-color: var(--nx-danger);
+  color: var(--nx-danger);
+}
+
+.nx-btn-stop:hover {
+  background: var(--nx-danger);
+  color: #1a0505;
+}
+
+.nx-btn-start {
+  background: var(--nx-success-soft);
+  border-color: var(--nx-success);
+  color: var(--nx-success);
+}
+
+.nx-btn-start:hover {
+  background: var(--nx-success);
+  color: #052e12;
+}
+
+.nx-btn-restart {
+  background: transparent;
+  border-color: var(--nx-accent);
+  color: var(--nx-accent);
+}
+
+.nx-btn-restart:hover {
+  background: var(--nx-accent-soft);
 }
 
 .nx-toggle {
@@ -622,13 +694,75 @@
 .nx-chart-title {
   color: var(--nx-text);
   font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.nx-chart-value {
+  color: var(--nx-accent);
+  font-size: 24px;
+  font-weight: 700;
   margin-bottom: 8px;
+}
+
+.nx-chart-value-max {
+  color: var(--nx-text-muted);
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .nx-fact-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+}
+
+.nx-fact-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--nx-border);
+}
+
+.nx-fact-row:last-child {
+  border-bottom: none;
+}
+
+.nx-fact-row span:first-child {
+  color: var(--nx-text-muted);
+}
+
+.nx-fact-row span:last-child {
+  color: var(--nx-text);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+}
+
+.nx-disk-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  background: var(--nx-panel);
+  font-size: 13px;
+  color: var(--nx-text-muted);
+}
+
+.nx-disk-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--nx-panel-alt);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.nx-disk-bar-fill {
+  height: 100%;
+  background: var(--nx-accent);
+  border-radius: 999px;
 }
 
 .nx-console {

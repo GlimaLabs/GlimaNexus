@@ -11,11 +11,24 @@ type Props = {
   busy: boolean;
   cpuHistory: number[];
   ramHistory: number[];
+  diskUsedGb?: number;
+  diskTotalGb?: number;
   onAction: (action: "start" | "stop" | "restart") => void;
   onClose: () => void;
 };
 
-export default function InstanceDetail({ serverId, instance, status, busy, cpuHistory, ramHistory, onAction, onClose }: Props) {
+export default function InstanceDetail({
+  serverId,
+  instance,
+  status,
+  busy,
+  cpuHistory,
+  ramHistory,
+  diskUsedGb,
+  diskTotalGb,
+  onAction,
+  onClose,
+}: Props) {
   const [tab, setTab] = useState<"status" | "config" | "console">("status");
   const [lines, setLines] = useState<string[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -26,7 +39,7 @@ export default function InstanceDetail({ serverId, instance, status, busy, cpuHi
 
   const isActive = status?.state === "active";
   const isFailed = status?.state === "failed";
-  const statusColor = isActive ? "var(--nx-accent)" : isFailed ? "var(--nx-danger)" : "var(--nx-text-muted)";
+  const statusColor = isActive ? "var(--nx-success)" : isFailed ? "var(--nx-danger)" : "var(--nx-text-muted)";
   const statusLabel = isActive ? "Online" : isFailed ? "Fehler" : status ? "Gestoppt" : "Unbekannt";
 
   useEffect(() => {
@@ -74,15 +87,15 @@ export default function InstanceDetail({ serverId, instance, status, busy, cpuHi
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {isActive ? (
-            <button className="nx-btn-danger" disabled={busy} onClick={() => onAction("stop")}>
+            <button className="nx-btn-stop" disabled={busy} onClick={() => onAction("stop")}>
               ⏸ Stoppen
             </button>
           ) : (
-            <button disabled={busy} onClick={() => onAction("start")}>
+            <button className="nx-btn-start" disabled={busy} onClick={() => onAction("start")}>
               ▶ Starten
             </button>
           )}
-          <button disabled={busy} onClick={() => onAction("restart")}>
+          <button className="nx-btn-restart" disabled={busy} onClick={() => onAction("restart")}>
             ⟳ Neustarten
           </button>
         </div>
@@ -101,22 +114,53 @@ export default function InstanceDetail({ serverId, instance, status, busy, cpuHi
       </div>
 
       {tab === "status" && (
-        <div className="nx-status-grid">
-          <div className="nx-chart-card">
-            <div className="nx-chart-title">CPU Auslastung</div>
-            <Sparkline values={cpuHistory} max={Math.max(100, instance.cpu_limit_percent)} />
+        <>
+          <div className="nx-status-grid">
+            <div className="nx-chart-card">
+              <div className="nx-chart-title">CPU Auslastung</div>
+              <div className="nx-chart-value">{(cpuHistory[cpuHistory.length - 1] ?? 0).toFixed(0)}%</div>
+              <Sparkline values={cpuHistory} max={Math.max(100, instance.cpu_limit_percent)} />
+            </div>
+            <div className="nx-chart-card">
+              <div className="nx-chart-title">RAM Auslastung</div>
+              <div className="nx-chart-value">
+                {((ramHistory[ramHistory.length - 1] ?? 0) / 1024).toFixed(1)} GB
+                <span className="nx-chart-value-max"> / {(instance.ram_limit_mb / 1024).toFixed(0)} GB</span>
+              </div>
+              <Sparkline values={ramHistory} max={instance.ram_limit_mb} />
+            </div>
+            <div className="nx-fact-card">
+              <div className="nx-fact-row">
+                <span>Install-Pfad</span>
+                <span title={instance.install_path}>…{instance.install_path.slice(-24)}</span>
+              </div>
+              <div className="nx-fact-row">
+                <span>Systemd-Unit</span>
+                <span title={instance.systemd_unit}>…{instance.systemd_unit.slice(-18)}</span>
+              </div>
+              <div className="nx-fact-row">
+                <span>CPU Limit</span>
+                <span>{instance.cpu_limit_percent}%</span>
+              </div>
+              <div className="nx-fact-row">
+                <span>RAM Limit</span>
+                <span>{instance.ram_limit_mb} MB</span>
+              </div>
+            </div>
           </div>
-          <div className="nx-chart-card">
-            <div className="nx-chart-title">RAM Auslastung</div>
-            <Sparkline values={ramHistory} max={instance.ram_limit_mb} />
-          </div>
-          <div className="nx-fact-card">
-            <div>Install-Pfad: {instance.install_path}</div>
-            <div>Systemd-Unit: {instance.systemd_unit}</div>
-            <div>CPU Limit: {instance.cpu_limit_percent}%</div>
-            <div>RAM Limit: {instance.ram_limit_mb} MB</div>
-          </div>
-        </div>
+
+          {diskTotalGb !== undefined && diskTotalGb > 0 && (
+            <div className="nx-disk-card">
+              <span>💾 Speicherplatz (Server)</span>
+              <div className="nx-disk-bar">
+                <div className="nx-disk-bar-fill" style={{ width: `${Math.min(100, ((diskUsedGb ?? 0) / diskTotalGb) * 100)}%` }} />
+              </div>
+              <span>
+                {diskUsedGb} GB / {diskTotalGb} GB
+              </span>
+            </div>
+          )}
+        </>
       )}
 
       {tab === "config" && (

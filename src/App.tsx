@@ -15,6 +15,8 @@ type HardwareStats = {
   cpu_percent: number;
   ram_used_mb: number;
   ram_total_mb: number;
+  disk_used_gb: number;
+  disk_total_gb: number;
 };
 
 function formatUptime(seconds: number): string {
@@ -284,13 +286,28 @@ function App() {
                 <span>{server.name}</span>
                 <span
                   className={`nx-status-dot ${s ? "" : "nx-pulse"}`}
-                  style={{ background: s ? "var(--nx-accent)" : "var(--nx-warning)" }}
+                  style={{ background: s ? "var(--nx-success)" : "var(--nx-warning)" }}
                 />
               </div>
               <div className="nx-server-ip">{server.host}</div>
-              <div style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
-                {s ? `CPU ${s.cpu_percent.toFixed(0)}% · RAM ${s.ram_used_mb}/${s.ram_total_mb} MB` : "Verbinde…"}
-              </div>
+              {s ? (
+                <div className="nx-server-meter-row">
+                  <div className="nx-server-meter">
+                    <span>CPU {s.cpu_percent.toFixed(0)}%</span>
+                    <div className="nx-meter-track">
+                      <div className="nx-meter-fill" style={{ width: `${Math.min(100, s.cpu_percent)}%` }} />
+                    </div>
+                  </div>
+                  <div className="nx-server-meter">
+                    <span>RAM {Math.round((s.ram_used_mb / Math.max(1, s.ram_total_mb)) * 100)}%</span>
+                    <div className="nx-meter-track">
+                      <div className="nx-meter-fill" style={{ width: `${Math.min(100, (s.ram_used_mb / Math.max(1, s.ram_total_mb)) * 100)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>Verbinde…</div>
+              )}
             </div>
           );
         })}
@@ -351,7 +368,7 @@ function App() {
                 const status = instanceStatus[instance.id];
                 const isActive = status?.state === "active";
                 const isFailed = status?.state === "failed";
-                const statusColor = isActive ? "var(--nx-accent)" : isFailed ? "var(--nx-danger)" : "var(--nx-text-muted)";
+                const statusColor = isActive ? "var(--nx-success)" : isFailed ? "var(--nx-danger)" : "var(--nx-text-muted)";
                 const isBusy = instanceBusy === instance.id;
                 const statusLabel = isBusy
                   ? isActive
@@ -435,6 +452,8 @@ function App() {
                     busy={instanceBusy === instance.id}
                     cpuHistory={cpuHistory[selectedServer.id] ?? []}
                     ramHistory={ramHistory[selectedServer.id] ?? []}
+                    diskUsedGb={selectedStats?.disk_used_gb}
+                    diskTotalGb={selectedStats?.disk_total_gb}
                     onAction={(action) => runInstanceAction(instance, action)}
                     onClose={() => setOpenInstanceId(null)}
                   />
