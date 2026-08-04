@@ -445,10 +445,10 @@ export default function InstanceDetail({
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button disabled={backupBusyName === b.name} onClick={() => downloadBackup(b.name)}>
+                    <button className="nx-btn-start" disabled={backupBusyName === b.name} onClick={() => downloadBackup(b.name)}>
                       {backupBusyName === b.name ? "…" : "Herunterladen"}
                     </button>
-                    <button disabled={backupBusyName === b.name} onClick={() => deleteBackup(b.name)}>
+                    <button className="nx-btn-stop" disabled={backupBusyName === b.name} onClick={() => deleteBackup(b.name)}>
                       Löschen
                     </button>
                   </div>
