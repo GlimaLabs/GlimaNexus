@@ -7,6 +7,7 @@ import TitleBar from "./TitleBar";
 import AddServerDialog from "./AddServerDialog";
 import GameStoreDialog from "./GameStoreDialog";
 import PatchNotesDialog from "./PatchNotesDialog";
+import DirectoryBrowserDialog from "./DirectoryBrowserDialog";
 import InstanceDetail from "./InstanceDetail";
 import novaNexusLogo from "./assets/novanexus_logo2.png";
 import GameIcon from "./GameIcon";
@@ -73,6 +74,7 @@ function App() {
   const [updatingInstanceId, setUpdatingInstanceId] = useState<string | null>(null);
   const [installingGame, setInstallingGame] = useState<GameTemplate | null>(null);
   const [showPatchNotes, setShowPatchNotes] = useState(false);
+  const [browsingInstance, setBrowsingInstance] = useState<{ instance: InstanceRecord; target: "install" | "backups" } | null>(null);
   const [localStats, setLocalStats] = useState<LocalSystemStats | null>(null);
   const [localCpuHistory, setLocalCpuHistory] = useState<number[]>([]);
 
@@ -616,6 +618,12 @@ function App() {
                             <button disabled={instanceBusy === instance.id} onClick={() => { setOpenMenuId(null); runInstanceAction(instance, "restart"); }}>
                               Neustart
                             </button>
+                            <button onClick={() => { setOpenMenuId(null); setBrowsingInstance({ instance, target: "install" }); }}>
+                              Hauptverzeichnis öffnen
+                            </button>
+                            <button onClick={() => { setOpenMenuId(null); setBrowsingInstance({ instance, target: "backups" }); }}>
+                              Backup-Ordner öffnen
+                            </button>
                             <button disabled={instanceBusy === instance.id} onClick={() => { setOpenMenuId(null); handleForget(instance); }}>
                               Entfernen
                             </button>
@@ -688,6 +696,16 @@ function App() {
       )}
 
       {showPatchNotes && <PatchNotesDialog onClose={() => setShowPatchNotes(false)} />}
+
+      {browsingInstance && selectedServerId && (
+        <DirectoryBrowserDialog
+          serverId={selectedServerId}
+          instanceId={browsingInstance.instance.id}
+          instanceName={browsingInstance.instance.display_name}
+          target={browsingInstance.target}
+          onClose={() => setBrowsingInstance(null)}
+        />
+      )}
     </div>
   );
 }

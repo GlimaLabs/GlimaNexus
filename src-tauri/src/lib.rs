@@ -629,6 +629,196 @@ async fn delete_instance(
     db.delete_instance(&instance_id).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DirEntry {
+    pub name: String,
+    pub is_dir: bool,
+    pub size_bytes: u64,
+}
+
+/// Only ever lets the two directories we actually manage for an instance be browsed - never
+/// an arbitrary path - since `path` comes straight from the frontend.
+fn resolve_browsable_path(instance_id: &str, target: &str) -> Result<String, String> {
+    if instance_id.is_empty() || instance_id.contains('/') || instance_id.contains("..") {
+        return Err(format!("Ungültige instance_id: {instance_id:?}"));
+    }
+    match target {
+        "install" => Ok(format!("/home/gameserver/instances/{instance_id}")),
+        "backups" => Ok(format!("/home/gameserver/backups/{instance_id}")),
+        other => Err(format!("Unbekanntes Verzeichnis: {other:?}")),
+    }
+}
+
+/// Module D: lists the top-level contents (not recursive - just enough to see what's there)
+/// of a game instance's install or backups directory.
+#[tauri::command]
+async fn list_directory(
+    state: State<'_, AppState>,
+    server_id: String,
+    instance_id: String,
+    target: String,
+) -> Result<Vec<DirEntry>, String> {
+    let path = resolve_browsable_path(&instance_id, &target)?;
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    let raw = session
+        .exec(&format!(
+            "sudo find {path} -mindepth 1 -maxdepth 1 -printf '%y|%f|%s\\n' 2>/dev/null"
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut entries: Vec<DirEntry> = raw
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.splitn(3, '|');
+            let type_char = parts.next()?;
+            let name = parts.next()?.to_string();
+            let size_bytes = parts.next()?.parse().ok()?;
+            Some(DirEntry { name, is_dir: type_char == "d", size_bytes })
+        })
+        .collect();
+    entries.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    Ok(entries)
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct BackupEntry {
+    pub name: String,
+    pub size_bytes: u64,
+    /// Unix timestamp (seconds) of the backup file's mtime.
+    pub created_at: i64,
+}
+
+fn validate_backup_filename(name: &str) -> Result<(), String> {
+    if name.is_empty() || name.contains('/') || name.contains("..") || !name.ends_with(".tar.gz") {
+        return Err(format!("Ungültiger Backup-Dateiname: {name:?}"));
+    }
+    Ok(())
+}
+
+/// Module D: creates a `.tar.gz` snapshot of an instance's entire install directory under
+/// `/home/gameserver/backups/<instance_id>/`, timestamped so multiple backups can coexist.
+/// Backs up everything rather than trying to guess each game's "world folder" convention -
+/// simpler and safer, at the cost of a bigger archive for games with large install sizes.
+#[tauri::command]
+async fn create_backup(
+    state: State<'_, AppState>,
+    server_id: String,
+    instance_id: String,
+    install_path: String,
+) -> Result<BackupEntry, String> {
+    validate_instance_path(&install_path, &instance_id)?;
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+
+    let backup_dir = format!("/home/gameserver/backups/{instance_id}");
+    let filename = format!("backup-{}.tar.gz", chrono::Utc::now().format("%Y%m%d-%H%M%S"));
+    let archive_path = format!("{backup_dir}/{filename}");
+
+    session
+        .exec(&format!(
+            "sudo mkdir -p {backup_dir} && sudo chown gameserver:gameserver {backup_dir} && \
+             sudo -u gameserver tar -czf {archive_path} -C {install_path} ."
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let stat = session
+        .exec(&format!("sudo stat -c '%s|%Y' {}", games::shell_single_quote(&archive_path)))
+        .await
+        .map_err(|e| e.to_string())?;
+    let (size_bytes, created_at) = stat
+        .trim()
+        .split_once('|')
+        .and_then(|(s, t)| Some((s.parse().ok()?, t.parse().ok()?)))
+        .ok_or_else(|| "Backup erstellt, aber Größe/Zeitstempel konnten nicht gelesen werden".to_string())?;
+
+    Ok(BackupEntry { name: filename, size_bytes, created_at })
+}
+
+/// Module D: lists backups for an instance, newest first.
+#[tauri::command]
+async fn list_backups(state: State<'_, AppState>, server_id: String, instance_id: String) -> Result<Vec<BackupEntry>, String> {
+    if instance_id.is_empty() || instance_id.contains('/') || instance_id.contains("..") {
+        return Err(format!("Ungültige instance_id: {instance_id:?}"));
+    }
+    let backup_dir = format!("/home/gameserver/backups/{instance_id}");
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    let raw = session
+        .exec(&format!(
+            "sudo find {backup_dir} -maxdepth 1 -name '*.tar.gz' -printf '%f|%s|%T@\\n' 2>/dev/null"
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut entries: Vec<BackupEntry> = raw
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.splitn(3, '|');
+            let name = parts.next()?.to_string();
+            let size_bytes = parts.next()?.parse().ok()?;
+            let created_at = parts.next()?.split('.').next()?.parse().ok()?;
+            Some(BackupEntry { name, size_bytes, created_at })
+        })
+        .collect();
+    entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(entries)
+}
+
+/// Module D: pulls a backup archive down over the SSH connection (no SFTP subsystem needed -
+/// just `cat` read as raw bytes) and saves it under the app's local data folder, so the user
+/// has an off-server copy without needing to know what SSH/SCP even is.
+#[tauri::command]
+async fn download_backup(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    server_id: String,
+    instance_id: String,
+    filename: String,
+) -> Result<String, String> {
+    validate_backup_filename(&filename)?;
+    let remote_path = format!("/home/gameserver/backups/{instance_id}/{filename}");
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    let bytes = session
+        .exec_bytes(&format!("sudo cat {}", games::shell_single_quote(&remote_path)))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut local_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| e.to_string())?;
+    local_dir.push("backups");
+    local_dir.push(&instance_id);
+    std::fs::create_dir_all(&local_dir).map_err(|e| e.to_string())?;
+    let local_path = local_dir.join(&filename);
+    std::fs::write(&local_path, bytes).map_err(|e| e.to_string())?;
+
+    Ok(local_path.to_string_lossy().to_string())
+}
+
+/// Module D: deletes a backup archive from the server.
+#[tauri::command]
+async fn delete_backup(state: State<'_, AppState>, server_id: String, instance_id: String, filename: String) -> Result<(), String> {
+    validate_backup_filename(&filename)?;
+    let remote_path = format!("/home/gameserver/backups/{instance_id}/{filename}");
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    session
+        .exec(&format!("sudo rm -f {}", games::shell_single_quote(&remote_path)))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Module C: streams `journalctl -fu <unit>` live, line-by-line, to the frontend via a Tauri
 /// Channel. Runs as a detached background task so the command returns immediately and the
 /// UI thread is never blocked, even while the remote log keeps following indefinitely.
@@ -693,6 +883,11 @@ pub fn run() {
             get_instance_status,
             delete_instance,
             forget_instance,
+            list_directory,
+            create_backup,
+            list_backups,
+            download_backup,
+            delete_backup,
             stream_instance_logs,
         ])
         .run(tauri::generate_context!())

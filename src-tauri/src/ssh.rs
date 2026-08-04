@@ -62,12 +62,22 @@ impl SshSession {
 
     /// Runs a single command to completion, returning combined stdout.
     pub async fn exec(&mut self, command: &str) -> Result<String> {
-        tokio::time::timeout(EXEC_TIMEOUT, self.exec_inner(command))
+        let bytes = tokio::time::timeout(EXEC_TIMEOUT, self.exec_bytes_inner(command))
+            .await
+            .map_err(|_| anyhow!("Zeitüberschreitung beim Ausführen des Befehls (Verbindung tot?)"))??;
+        Ok(String::from_utf8_lossy(&bytes).to_string())
+    }
+
+    /// Same as `exec`, but returns the raw output bytes instead of lossy-decoding them as
+    /// UTF-8 - required for pulling down binary file content (e.g. `cat` on a backup archive)
+    /// without corrupting it. Uses a longer timeout since files can take a while to transfer.
+    pub async fn exec_bytes(&mut self, command: &str) -> Result<Vec<u8>> {
+        tokio::time::timeout(Duration::from_secs(300), self.exec_bytes_inner(command))
             .await
             .map_err(|_| anyhow!("Zeitüberschreitung beim Ausführen des Befehls (Verbindung tot?)"))?
     }
 
-    async fn exec_inner(&mut self, command: &str) -> Result<String> {
+    async fn exec_bytes_inner(&mut self, command: &str) -> Result<Vec<u8>> {
         let mut channel = self.handle.channel_open_session().await?;
         channel.exec(true, command).await?;
 
@@ -80,7 +90,7 @@ impl SshSession {
                 _ => {}
             }
         }
-        Ok(String::from_utf8_lossy(&output).to_string())
+        Ok(output)
     }
 
     /// Runs a command, writing `stdin_data` to it right after starting (e.g. to answer

@@ -41,6 +41,12 @@ export type VersionInfo = {
   up_to_date: boolean;
 };
 
+export type BackupEntry = {
+  name: string;
+  size_bytes: number;
+  created_at: number;
+};
+
 export type GameTemplate = {
   id: string;
   name: string;

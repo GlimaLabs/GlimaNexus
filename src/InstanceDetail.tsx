@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
-import type { ConfigSchema, InstanceRecord, InstanceStatus } from "./types";
+import type { BackupEntry, ConfigSchema, InstanceRecord, InstanceStatus } from "./types";
 
 type LogEvent = { event: "line"; text: string } | { event: "closed" };
 
@@ -33,7 +33,13 @@ export default function InstanceDetail({
   onAction,
   onClose,
 }: Props) {
-  const [tab, setTab] = useState<"status" | "config" | "console">("status");
+  const [tab, setTab] = useState<"status" | "config" | "console" | "backups">("status");
+  const [backups, setBackups] = useState<BackupEntry[]>([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [backupCreating, setBackupCreating] = useState(false);
+  const [backupBusyName, setBackupBusyName] = useState<string | null>(null);
+  const [backupError, setBackupError] = useState("");
+  const [backupSavedPath, setBackupSavedPath] = useState("");
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [configLoading, setConfigLoading] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
@@ -94,6 +100,80 @@ export default function InstanceDetail({
   function retryLogs() {
     setLines([]);
     setLogAttempt((n) => n + 1);
+  }
+
+  function loadBackups() {
+    setBackupsLoading(true);
+    setBackupError("");
+    invoke<BackupEntry[]>("list_backups", { serverId, instanceId: instance.id })
+      .then(setBackups)
+      .catch((err) => setBackupError(String(err)))
+      .finally(() => setBackupsLoading(false));
+  }
+
+  useEffect(() => {
+    if (tab === "backups") loadBackups();
+  }, [tab, serverId, instance.id]);
+
+  async function createBackup() {
+    setBackupCreating(true);
+    setBackupError("");
+    try {
+      await invoke("create_backup", {
+        serverId,
+        instanceId: instance.id,
+        installPath: instance.install_path,
+      });
+      loadBackups();
+    } catch (err) {
+      setBackupError(String(err));
+    } finally {
+      setBackupCreating(false);
+    }
+  }
+
+  async function downloadBackup(name: string) {
+    setBackupBusyName(name);
+    setBackupError("");
+    setBackupSavedPath("");
+    try {
+      const path = await invoke<string>("download_backup", { serverId, instanceId: instance.id, filename: name });
+      setBackupSavedPath(path);
+    } catch (err) {
+      setBackupError(String(err));
+    } finally {
+      setBackupBusyName(null);
+    }
+  }
+
+  async function deleteBackup(name: string) {
+    if (!confirm(`Backup "${name}" auf dem Server löschen?`)) return;
+    setBackupBusyName(name);
+    setBackupError("");
+    try {
+      await invoke("delete_backup", { serverId, instanceId: instance.id, filename: name });
+      setBackups((prev) => prev.filter((b) => b.name !== name));
+    } catch (err) {
+      setBackupError(String(err));
+    } finally {
+      setBackupBusyName(null);
+    }
+  }
+
+  function formatBackupSize(bytes: number): string {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  }
+
+  function formatBackupDate(unixSeconds: number): string {
+    return new Date(unixSeconds * 1000).toLocaleString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
 
   useEffect(() => {
@@ -173,6 +253,9 @@ export default function InstanceDetail({
         </button>
         <button className={`nx-tab ${tab === "console" ? "active" : ""}`} onClick={() => setTab("console")}>
           Live-Konsole
+        </button>
+        <button className={`nx-tab ${tab === "backups" ? "active" : ""}`} onClick={() => setTab("backups")}>
+          Backups
         </button>
       </div>
 
@@ -328,6 +411,51 @@ export default function InstanceDetail({
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "backups" && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <button className="nx-btn-restart" disabled={backupCreating} onClick={createBackup}>
+              {backupCreating ? "Erstellt…" : "Backup erstellen"}
+            </button>
+            <span style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
+              Sichert das komplette Server-Verzeichnis als .tar.gz auf dem Server.
+            </span>
+          </div>
+
+          {backupError && <p style={{ color: "var(--nx-danger)", fontSize: 12 }}>{backupError}</p>}
+          {backupSavedPath && (
+            <p style={{ color: "var(--nx-success)", fontSize: 12 }}>Heruntergeladen nach: {backupSavedPath}</p>
+          )}
+
+          {backupsLoading && <p style={{ color: "var(--nx-text-muted)" }}>Lade Backups…</p>}
+          {!backupsLoading && backups.length === 0 && (
+            <p style={{ color: "var(--nx-text-muted)" }}>Noch keine Backups vorhanden.</p>
+          )}
+          {!backupsLoading && backups.length > 0 && (
+            <div className="nx-backup-list">
+              {backups.map((b) => (
+                <div key={b.name} className="nx-backup-row">
+                  <div className="nx-backup-row-info">
+                    <div>{formatBackupDate(b.created_at)}</div>
+                    <div style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
+                      {b.name} · {formatBackupSize(b.size_bytes)}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button disabled={backupBusyName === b.name} onClick={() => downloadBackup(b.name)}>
+                      {backupBusyName === b.name ? "…" : "Herunterladen"}
+                    </button>
+                    <button disabled={backupBusyName === b.name} onClick={() => deleteBackup(b.name)}>
+                      Löschen
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

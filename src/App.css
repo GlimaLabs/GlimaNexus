@@ -397,6 +397,27 @@
   width: 560px;
 }
 
+.nx-dirbrowser-modal {
+  width: 440px;
+  max-height: 70vh;
+}
+
+.nx-dirbrowser-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nx-dirbrowser-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--nx-border);
+}
+
 .nx-patchnotes-modal {
   width: 480px;
   max-height: 80vh;
@@ -862,6 +883,28 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.nx-backup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nx-backup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  padding: 10px 14px;
+  background: var(--nx-panel-alt);
+}
+
+.nx-backup-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .nx-fact-row {
