@@ -106,6 +106,10 @@ pub struct AddServerInput {
     pub port: u16,
     pub username: String,
     pub password: String,
+    /// IANA timezone (e.g. "Europe/Berlin") of the machine running the app - passed through
+    /// so the server's clock matches, which backup timestamps and log timelines depend on.
+    #[serde(default)]
+    pub timezone: Option<String>,
 }
 
 /// Establishes a brand-new authenticated SSH session for a stored server, looking up
@@ -155,7 +159,7 @@ async fn add_server(state: State<'_, AppState>, input: AddServerInput) -> Result
     provisioning::ensure_passwordless_sudo(&mut session, &input.username, &input.password)
         .await
         .map_err(|e| e.to_string())?;
-    provisioning::bootstrap_server(&mut session)
+    provisioning::bootstrap_server(&mut session, input.timezone.as_deref())
         .await
         .map_err(|e| e.to_string())?;
 

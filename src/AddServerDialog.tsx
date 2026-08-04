@@ -22,7 +22,14 @@ export default function AddServerDialog({ onClose, onCreated }: Props) {
     setError("");
     try {
       const server = await invoke<ServerRecord>("add_server", {
-        input: { name, host, port: Number(port), username, password },
+        input: {
+          name,
+          host,
+          port: Number(port),
+          username,
+          password,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
       });
       onCreated(server);
     } catch (err) {

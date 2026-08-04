@@ -66,7 +66,7 @@ pub async fn detect_distro_family(ssh: &mut SshSession) -> Result<DistroFamily> 
 /// Creates the isolated `gameserver` system user (no root execution of game processes)
 /// and installs base dependencies (Java, 32-bit libs for SteamCMD/game binaries) using
 /// the right package manager for the detected distro family.
-pub async fn bootstrap_server(ssh: &mut SshSession) -> Result<()> {
+pub async fn bootstrap_server(ssh: &mut SshSession, timezone: Option<&str>) -> Result<()> {
     ssh.exec("id -u gameserver &>/dev/null || sudo useradd -m -s /bin/bash gameserver").await?;
 
     let family = detect_distro_family(ssh).await?;
@@ -75,14 +75,26 @@ pub async fn bootstrap_server(ssh: &mut SshSession) -> Result<()> {
             ssh.exec("sudo apt-get update -y").await?;
             ssh.exec(
                 "sudo apt-get install -y curl wget tar unzip jq openjdk-21-jre-headless openjdk-25-jre-headless \
-                 software-properties-common lib32gcc-s1 lib32stdc++6",
+                 software-properties-common lib32gcc-s1 lib32stdc++6 unattended-upgrades",
+            )
+            .await?;
+            // Debian's unattended-upgrades package installs disabled by default - enabling it
+            // needs a debconf answer, not just the package being present.
+            ssh.exec(
+                "echo 'unattended-upgrades unattended-upgrades/enable_auto_updates boolean true' | \
+                 sudo debconf-set-selections && sudo dpkg-reconfigure -f noninteractive unattended-upgrades",
             )
             .await?;
         }
         DistroFamily::Fedora => {
             ssh.exec(
                 "sudo dnf install -y curl wget tar unzip jq java-21-openjdk-headless java-latest-openjdk-headless \
-                 glibc.i686 libstdc++.i686 ncurses-libs.i686",
+                 glibc.i686 libstdc++.i686 ncurses-libs.i686 dnf-automatic",
+            )
+            .await?;
+            ssh.exec(
+                "sudo sed -i 's/^apply_updates = no/apply_updates = yes/' /etc/dnf/automatic.conf && \
+                 sudo systemctl enable --now dnf-automatic.timer",
             )
             .await?;
         }
@@ -101,7 +113,30 @@ pub async fn bootstrap_server(ssh: &mut SshSession) -> Result<()> {
     .await?;
 
     ensure_swap(ssh).await?;
+    limit_journal_size(ssh).await?;
 
+    if let Some(tz) = timezone {
+        // Only ever forward IANA-format identifiers (Region/City, letters/digits/_/+/-) -
+        // never interpolate the raw string otherwise, this comes from the OS's own timezone
+        // detection but there's no reason to trust it blindly in a shell command.
+        if tz.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '+' | '-')) {
+            let _ = ssh.exec(&format!("sudo timedatectl set-timezone {tz}")).await;
+        }
+    }
+
+    Ok(())
+}
+
+/// Minecraft/Palworld/etc. can run for weeks and log constantly - without a cap, journald
+/// logs can quietly fill the disk and take the whole VPS down. Idempotent (just (re)writes
+/// the same config line).
+async fn limit_journal_size(ssh: &mut SshSession) -> Result<()> {
+    ssh.exec(
+        "sudo mkdir -p /etc/systemd/journald.conf.d && \
+         echo -e '[Journal]\\nSystemMaxUse=200M' | sudo tee /etc/systemd/journald.conf.d/glimanexus.conf > /dev/null && \
+         sudo systemctl restart systemd-journald",
+    )
+    .await?;
     Ok(())
 }
 
