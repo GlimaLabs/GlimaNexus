@@ -100,6 +100,30 @@ pub async fn bootstrap_server(ssh: &mut SshSession) -> Result<()> {
     )
     .await?;
 
+    ensure_swap(ssh).await?;
+
+    Ok(())
+}
+
+/// Many cheap VPS images ship with zero swap configured - when RAM fills up (easy to hit
+/// with a couple of gameserver instances), the kernel OOM-killer just kills the gameserver
+/// process outright instead of the OS gracefully slowing down. Idempotent: does nothing if
+/// swap already exists in any form (swap partition, existing swapfile, etc.).
+pub async fn ensure_swap(ssh: &mut SshSession) -> Result<()> {
+    let existing = ssh.exec("swapon --show --noheadings 2>/dev/null").await.unwrap_or_default();
+    if !existing.trim().is_empty() {
+        return Ok(()); // swap already configured, nothing to do
+    }
+
+    ssh.exec(
+        "sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 && \
+         sudo chmod 600 /swapfile && \
+         sudo mkswap /swapfile && \
+         sudo swapon /swapfile && \
+         grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab > /dev/null",
+    )
+    .await?;
+
     Ok(())
 }
 
