@@ -8,6 +8,7 @@ import AddServerDialog from "./AddServerDialog";
 import GameStoreDialog from "./GameStoreDialog";
 import InstanceDetail from "./InstanceDetail";
 import novaNexusLogo from "./assets/novanexus_logo2.png";
+import { gameIcon } from "./gameIcons";
 import type { InstanceRecord, InstanceStatus, ServerRecord } from "./types";
 
 type HardwareStats = {
@@ -343,7 +344,9 @@ function App() {
                     return (
                       <div key={instance.id} className="nx-instance-card">
                         <div className="nx-instance-card-title">
-                          <span>{instance.display_name}</span>
+                          <span>
+                            {gameIcon(instance.game_id)} {instance.display_name}
+                          </span>
                           <label className="nx-toggle">
                             <input
                               type="checkbox"

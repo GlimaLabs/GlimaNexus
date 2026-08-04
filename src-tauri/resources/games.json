@@ -9,8 +9,7 @@
       "install": {
         "type": "direct-download",
         "steps": [
-          "mkdir -p /home/gameserver/instances/{instance_id}",
-          "cd /home/gameserver/instances/{instance_id} && curl -o paper.jar https://api.papermc.io/v2/projects/paper/versions/1.20.4/builds/latest/downloads/paper-1.20.4-latest.jar",
+          "cd /home/gameserver/instances/{instance_id} && URL=$(curl -s https://fill.papermc.io/v3/projects/paper/versions/1.20.4/builds | jq -r '.[0].downloads[\"server:default\"].url') && curl -o paper.jar \"$URL\"",
           "cd /home/gameserver/instances/{instance_id} && echo 'eula=true' > eula.txt"
         ]
       },
