@@ -7,12 +7,20 @@ mod ssh;
 use db::{Db, InstanceRecord, ServerRecord};
 use games::GameTemplate;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tauri::ipc::Channel;
 use tauri::{Manager, State};
+use tokio::sync::{Mutex as TokioMutex, OwnedMutexGuard};
+
+type SessionSlot = Arc<TokioMutex<Option<ssh::SshSession>>>;
 
 pub struct AppState {
     pub db: Mutex<Db>,
+    /// One reused SSH connection per server, instead of a fresh handshake + auth for every
+    /// single poll (CPU/RAM every 8s, instance status every 5s) - that reconnect overhead is
+    /// what made the UI feel laggy under frequent polling.
+    pub ssh_pool: Mutex<HashMap<String, SessionSlot>>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -38,9 +46,10 @@ pub struct AddServerInput {
     pub password: String,
 }
 
-/// Opens an authenticated SSH session for a stored server, looking up host/port/username
-/// from the DB and the password from the OS keyring — the frontend never handles secrets.
-async fn connect_to_server(state: &State<'_, AppState>, server_id: &str) -> Result<ssh::SshSession, String> {
+/// Establishes a brand-new authenticated SSH session for a stored server, looking up
+/// host/port/username from the DB and the password from the OS keyring, and makes sure
+/// passwordless sudo is set up (self-healing for servers added before that existed).
+async fn connect_fresh(state: &State<'_, AppState>, server_id: &str) -> Result<ssh::SshSession, String> {
     let server = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         db.get_server(server_id).map_err(|e| e.to_string())?
@@ -49,12 +58,28 @@ async fn connect_to_server(state: &State<'_, AppState>, server_id: &str) -> Resu
     let mut session = ssh::SshSession::connect_password(&server.host, server.port, &server.username, &password)
         .await
         .map_err(|e| e.to_string())?;
-    // Self-healing: makes sure passwordless sudo is set up even for servers added
-    // before this was introduced, so existing connections repair themselves.
     provisioning::ensure_passwordless_sudo(&mut session, &server.username, &password)
         .await
         .map_err(|e| e.to_string())?;
     Ok(session)
+}
+
+/// Returns the server's pooled SSH session, connecting (and running the one-time sudo
+/// setup) only if there isn't already a live one. The caller gets exclusive access via the
+/// returned guard for as long as they hold it; on any exec failure they should set the slot
+/// back to `None` so the next call reconnects instead of reusing a dead connection.
+async fn acquire_session(state: &State<'_, AppState>, server_id: &str) -> Result<OwnedMutexGuard<Option<ssh::SshSession>>, String> {
+    let slot = {
+        let mut pool = state.ssh_pool.lock().map_err(|e| e.to_string())?;
+        pool.entry(server_id.to_string())
+            .or_insert_with(|| Arc::new(TokioMutex::new(None)))
+            .clone()
+    };
+    let mut guard = slot.lock_owned().await;
+    if guard.is_none() {
+        *guard = Some(connect_fresh(state, server_id).await?);
+    }
+    Ok(guard)
 }
 
 /// Module A: registers a new server. Connects via SSH, provisions the isolated
@@ -102,9 +127,10 @@ async fn add_server(state: State<'_, AppState>, input: AddServerInput) -> Result
 /// must confirm with the user before calling this.
 #[tauri::command]
 async fn reboot_server(state: State<'_, AppState>, server_id: String) -> Result<(), String> {
-    let mut session = connect_to_server(&state, &server_id).await?;
+    let mut guard = acquire_session(&state, &server_id).await?;
     // The connection drops as the machine reboots - that's expected, not an error.
-    let _ = session.exec("sudo reboot").await;
+    let _ = guard.as_mut().unwrap().exec("sudo reboot").await;
+    *guard = None;
     Ok(())
 }
 
@@ -121,22 +147,32 @@ fn delete_server(state: State<'_, AppState>, id: String) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.delete_server(&id).map_err(|e| e.to_string())?;
     let _ = keyring_store::delete_secret(&id);
+    if let Ok(mut pool) = state.ssh_pool.lock() {
+        pool.remove(&id);
+    }
     Ok(())
 }
 
 /// Module A: live CPU/RAM polling via a lightweight remote one-liner.
 #[tauri::command]
 async fn get_hardware_stats(state: State<'_, AppState>, server_id: String) -> Result<HardwareStats, String> {
-    let mut session = connect_to_server(&state, &server_id).await?;
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
 
-    let cpu_raw = session
-        .exec("top -bn1 | grep 'Cpu(s)' | awk '{print $2}'")
-        .await
-        .map_err(|e| e.to_string())?;
-    let mem_raw = session
-        .exec("free -m | awk '/Mem:/ {print $3\" \"$2}'")
-        .await
-        .map_err(|e| e.to_string())?;
+    let result = async {
+        let cpu_raw = session.exec("top -bn1 | grep 'Cpu(s)' | awk '{print $2}'").await?;
+        let mem_raw = session.exec("free -m | awk '/Mem:/ {print $3\" \"$2}'").await?;
+        anyhow::Ok((cpu_raw, mem_raw))
+    }
+    .await;
+
+    let (cpu_raw, mem_raw) = match result {
+        Ok(v) => v,
+        Err(e) => {
+            *guard = None;
+            return Err(e.to_string());
+        }
+    };
 
     let cpu_percent = cpu_raw.trim().parse::<f32>().unwrap_or(0.0);
     let mut mem_parts = mem_raw.trim().split_whitespace();
@@ -171,7 +207,8 @@ async fn install_game(
 ) -> Result<InstanceRecord, String> {
     let template = games::find_template(&game_id).ok_or_else(|| format!("Unbekanntes Spiel: {game_id}"))?;
 
-    let mut session = connect_to_server(&state, &server_id).await?;
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
 
     let instance_id = uuid::Uuid::new_v4().to_string();
     let ram_limit_mb = template.default_ram_limit_mb;
@@ -201,13 +238,13 @@ async fn install_game(
     let unit_name = format!("novanexus-{instance_id}");
     let unit_contents = provisioning::render_systemd_unit(&instance_id, &install_path, &start_command);
 
-    provisioning::install_systemd_unit(&mut session, &unit_name, &unit_contents)
+    provisioning::install_systemd_unit(session, &unit_name, &unit_contents)
         .await
         .map_err(|e| e.to_string())?;
 
     // Start the instance right after install so the user doesn't have to know
     // that "enable" (survive reboot) and "start" (running now) are different things.
-    provisioning::control_instance(&mut session, &unit_name, "start")
+    provisioning::control_instance(session, &unit_name, "start")
         .await
         .map_err(|e| e.to_string())?;
 
@@ -230,10 +267,15 @@ async fn install_game(
 /// Module C: start/stop/restart a game instance via systemd.
 #[tauri::command]
 async fn control_instance(state: State<'_, AppState>, server_id: String, unit_name: String, action: String) -> Result<String, String> {
-    let mut session = connect_to_server(&state, &server_id).await?;
-    provisioning::control_instance(&mut session, &unit_name, &action)
-        .await
-        .map_err(|e| e.to_string())
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let result = provisioning::control_instance(guard.as_mut().unwrap(), &unit_name, &action).await;
+    match result {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            *guard = None;
+            Err(e.to_string())
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -247,8 +289,9 @@ pub struct InstanceStatus {
 /// instead of guessing.
 #[tauri::command]
 async fn get_instance_status(state: State<'_, AppState>, server_id: String, unit_name: String) -> Result<InstanceStatus, String> {
-    let mut session = connect_to_server(&state, &server_id).await?;
-    let output = session
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    let result = session
         .exec(&format!(
             "STATE=$(systemctl is-active {unit_name}); \
              TS=$(systemctl show -p ActiveEnterTimestamp --value {unit_name}); \
@@ -257,8 +300,15 @@ async fn get_instance_status(state: State<'_, AppState>, server_id: String, unit
              else UPTIME=0; fi; \
              echo \"$STATE|$UPTIME\""
         ))
-        .await
-        .map_err(|e| e.to_string())?;
+        .await;
+
+    let output = match result {
+        Ok(v) => v,
+        Err(e) => {
+            *guard = None;
+            return Err(e.to_string());
+        }
+    };
 
     let mut parts = output.trim().split('|');
     let state = parts.next().unwrap_or("unknown").to_string();
@@ -307,8 +357,9 @@ async fn delete_instance(
 ) -> Result<(), String> {
     validate_instance_path(&install_path, &instance_id)?;
 
-    if let Ok(mut session) = connect_to_server(&state, &server_id).await {
-        let _ = provisioning::control_instance(&mut session, &unit_name, "stop").await;
+    if let Ok(mut guard) = acquire_session(&state, &server_id).await {
+        let session = guard.as_mut().unwrap();
+        let _ = provisioning::control_instance(session, &unit_name, "stop").await;
         let _ = session.exec(&format!("sudo systemctl disable {unit_name}")).await;
         let _ = session
             .exec(&format!("sudo rm -f /etc/systemd/system/{unit_name}.service"))
@@ -330,7 +381,9 @@ async fn stream_instance_logs(
     unit_name: String,
     on_event: Channel<LogEvent>,
 ) -> Result<(), String> {
-    let mut session = connect_to_server(&state, &server_id).await?;
+    // Held open indefinitely by the spawned task below (journalctl -f never returns), so it
+    // gets its own dedicated connection instead of tying up the shared per-server pool slot.
+    let mut session = connect_fresh(&state, &server_id).await?;
 
     tauri::async_runtime::spawn(async move {
         let command = format!("journalctl -fu {unit_name} -n 200 --no-pager");
@@ -357,7 +410,7 @@ pub fn run() {
             let db_path = app_data_dir.join("novanexus.db");
             let db_key = keyring_store::get_or_create_db_key()?;
             let db = Db::open(db_path, &db_key)?;
-            app.manage(AppState { db: Mutex::new(db) });
+            app.manage(AppState { db: Mutex::new(db), ssh_pool: Mutex::new(HashMap::new()) });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
