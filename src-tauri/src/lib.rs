@@ -348,8 +348,11 @@ async fn get_instance_config(
     let mut guard = acquire_session(&state, &server_id).await?;
     let session = guard.as_mut().unwrap();
     let path = format!("{install_path}/{}", schema.file);
+    // The config file is owned by `gameserver`, not the SSH login user - a plain `cat` gets
+    // "Permission denied" (silently swallowed by the redirect) and we'd parse an empty file,
+    // showing every field's default instead of its real value.
     let raw = session
-        .exec(&format!("cat {} 2>/dev/null", games::shell_single_quote(&path)))
+        .exec(&format!("sudo cat {} 2>/dev/null", games::shell_single_quote(&path)))
         .await
         .map_err(|e| e.to_string())?;
 
@@ -376,7 +379,7 @@ async fn save_instance_config(
     let path = format!("{install_path}/{}", schema.file);
     let quoted_path = games::shell_single_quote(&path);
     let raw = session
-        .exec(&format!("cat {quoted_path} 2>/dev/null"))
+        .exec(&format!("sudo cat {quoted_path} 2>/dev/null"))
         .await
         .map_err(|e| e.to_string())?;
 
