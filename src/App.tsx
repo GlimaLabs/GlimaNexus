@@ -618,7 +618,7 @@ function App() {
                       {statusLabel}
                     </div>
                     {status && <div className="nx-instance-card-sub">Uptime: {formatUptime(status.uptime_seconds)}</div>}
-                    {instanceVersions[instance.id] && !instanceVersions[instance.id].up_to_date && (
+                    {instanceVersions[instance.id]?.installed && !instanceVersions[instance.id].up_to_date && (
                       <button
                         className="nx-update-available-btn"
                         disabled={updatingInstanceId === instance.id}
