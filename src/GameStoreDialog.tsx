@@ -7,9 +7,11 @@ type Props = {
   serverId: string;
   onClose: () => void;
   onInstalled: (instance: InstanceRecord) => void;
+  onInstallStart: (game: GameTemplate) => void;
+  onInstallDone: () => void;
 };
 
-export default function GameStoreDialog({ serverId, onClose, onInstalled }: Props) {
+export default function GameStoreDialog({ serverId, onClose, onInstalled, onInstallStart, onInstallDone }: Props) {
   const [games, setGames] = useState<GameTemplate[]>([]);
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -23,6 +25,7 @@ export default function GameStoreDialog({ serverId, onClose, onInstalled }: Prop
   async function install(game: GameTemplate) {
     setInstallingId(game.id);
     setError("");
+    onInstallStart(game);
     try {
       const instance = await invoke<InstanceRecord>("install_game", {
         serverId,
@@ -34,6 +37,7 @@ export default function GameStoreDialog({ serverId, onClose, onInstalled }: Prop
       setError(String(err));
     } finally {
       setInstallingId(null);
+      onInstallDone();
     }
   }
 

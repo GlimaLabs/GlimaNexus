@@ -70,6 +70,7 @@ function App() {
   const [gameTemplates, setGameTemplates] = useState<Record<string, GameTemplate>>({});
   const [instanceVersions, setInstanceVersions] = useState<Record<string, VersionInfo>>({});
   const [updatingInstanceId, setUpdatingInstanceId] = useState<string | null>(null);
+  const [installingGame, setInstallingGame] = useState<GameTemplate | null>(null);
   const [localStats, setLocalStats] = useState<LocalSystemStats | null>(null);
   const [localCpuHistory, setLocalCpuHistory] = useState<number[]>([]);
 
@@ -496,6 +497,23 @@ function App() {
               <p style={{ color: "var(--nx-text-muted)" }}>Noch keine Gameserver installiert.</p>
             )}
             <div className="nx-instance-grid">
+              {installingGame && (
+                <div className="nx-instance-card nx-instance-card-installing">
+                  <div className="nx-instance-card-icon-row">
+                    <div className="nx-instance-icon-box">
+                      <GameIcon gameId={installingGame.id} size={38} />
+                    </div>
+                    <div className="nx-instance-card-info">
+                      <div className="nx-instance-card-title">{installingGame.name}</div>
+                      <div className="nx-instance-card-subtitle">Wird installiert…</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
+                    <span className="nx-spinner" />
+                    Download & Einrichtung auf dem Server, kann 1–2 Minuten dauern
+                  </div>
+                </div>
+              )}
               {instances.map((instance) => {
                 const status = instanceStatus[instance.id];
                 const isActive = status?.state === "active";
@@ -653,6 +671,8 @@ function App() {
             setInstances((prev) => [...prev, instance]);
             setShowStoreDialog(false);
           }}
+          onInstallStart={setInstallingGame}
+          onInstallDone={() => setInstallingGame(null)}
         />
       )}
     </div>

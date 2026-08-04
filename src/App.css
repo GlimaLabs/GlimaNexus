@@ -626,6 +626,12 @@
   background: var(--nx-panel);
 }
 
+.nx-instance-card-installing {
+  border-style: dashed;
+  border-color: var(--nx-accent);
+  background: var(--nx-accent-soft);
+}
+
 .nx-instance-card-icon-row {
   display: flex;
   align-items: center;
