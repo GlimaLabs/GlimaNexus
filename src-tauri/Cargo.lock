@@ -1699,6 +1699,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "glimanexus"
+version = "0.1.22"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "keyring",
+ "rusqlite",
+ "russh",
+ "russh-keys",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tauri-plugin-process",
+ "tauri-plugin-updater",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2567,30 +2591,6 @@ name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
-
-[[package]]
-name = "novanexus"
-version = "0.1.22"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "keyring",
- "rusqlite",
- "russh",
- "russh-keys",
- "serde",
- "serde_json",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tauri-plugin-process",
- "tauri-plugin-updater",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
-]
 
 [[package]]
 name = "ntapi"

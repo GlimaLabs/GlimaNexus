@@ -1,6 +1,6 @@
 use keyring::Entry;
 
-const SERVICE: &str = "com.stateofeconomy.novanexus";
+const SERVICE: &str = "com.glimalabs.glimanexus";
 
 /// Stores an SSH password or key passphrase in the native OS keyring
 /// (Windows Credential Manager / Gnome Keyring / KWallet). Never touches disk.

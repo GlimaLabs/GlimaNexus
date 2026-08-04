@@ -247,7 +247,7 @@ function App() {
   }
 
   async function handleForget(instance: InstanceRecord) {
-    if (!confirm(`"${instance.display_name}" aus NovaNexus entfernen? Dienst und Dateien bleiben auf dem Server erhalten.`)) return;
+    if (!confirm(`"${instance.display_name}" aus GlimaNexus entfernen? Dienst und Dateien bleiben auf dem Server erhalten.`)) return;
     setInstanceBusy(instance.id);
     try {
       await invoke("forget_instance", { instanceId: instance.id });
@@ -304,7 +304,7 @@ function App() {
 
   async function handleDisconnectServer() {
     if (!selectedServer) return;
-    if (!confirm(`"${selectedServer.name}" wirklich trennen und aus NovaNexus entfernen?`)) return;
+    if (!confirm(`"${selectedServer.name}" wirklich trennen und aus GlimaNexus entfernen?`)) return;
     setServerBusy(true);
     try {
       await invoke("delete_server", { id: selectedServer.id });
@@ -327,7 +327,7 @@ function App() {
       <UpdateBanner />
       <aside className="nx-sidebar">
         <div className="nx-brand">
-          <img src={novaNexusLogo} alt="NovaNexus" className="nx-brand-logo" />
+          <img src={novaNexusLogo} alt="GlimaNexus" className="nx-brand-logo" />
         </div>
 
         <nav className="nx-nav">

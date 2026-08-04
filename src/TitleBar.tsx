@@ -12,7 +12,7 @@ export default function TitleBar() {
   return (
     <div className="nx-titlebar" data-tauri-drag-region>
       <div className="nx-titlebar-title" data-tauri-drag-region>
-        NovaNexus
+        GlimaNexus
       </div>
       <div className="nx-titlebar-controls">
         <button className="nx-titlebar-btn" onClick={() => currentWindow()?.minimize()} aria-label="Minimieren">

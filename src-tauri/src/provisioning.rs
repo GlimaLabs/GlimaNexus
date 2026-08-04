@@ -61,7 +61,7 @@ pub fn render_systemd_unit(instance_id: &str, working_dir: &str, start_command: 
     let escaped_command = start_command.replace('\'', "'\\''");
     format!(
         "[Unit]\n\
-         Description=NovaNexus Gameserver Instance {instance_id}\n\
+         Description=GlimaNexus Gameserver Instance {instance_id}\n\
          After=network.target\n\n\
          [Service]\n\
          Type=simple\n\

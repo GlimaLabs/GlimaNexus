@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    novanexus_lib::run()
+    glimanexus_lib::run()
 }

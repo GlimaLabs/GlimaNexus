@@ -62,7 +62,7 @@ pub struct LocalSystemStats {
     pub net_down_kbps: f64,
 }
 
-/// Reads CPU/RAM/network usage of the machine NovaNexus itself is running on
+/// Reads CPU/RAM/network usage of the machine GlimaNexus itself is running on
 /// (not a managed server) for the sidebar's local System Status widget.
 #[tauri::command]
 fn get_local_system_stats(state: State<'_, AppState>) -> Result<LocalSystemStats, String> {
@@ -568,7 +568,7 @@ fn validate_instance_path(install_path: &str, instance_id: &str) -> Result<(), S
     Ok(())
 }
 
-/// "Schlank" option: forgets the instance in NovaNexus only, leaving the service and its
+/// "Schlank" option: forgets the instance in GlimaNexus only, leaving the service and its
 /// files untouched on the server (e.g. to keep a world/save for later, or re-add it as a
 /// server-side unit manually). Does not require an SSH connection.
 #[tauri::command]
