@@ -55,6 +55,10 @@ pub async fn bootstrap_server(ssh: &mut SshSession) -> Result<()> {
 /// Generates and installs a systemd unit so the game server survives reboots
 /// and is controlled purely via `systemctl` (start/stop/restart), running as `gameserver`.
 pub fn render_systemd_unit(instance_id: &str, working_dir: &str, start_command: &str) -> String {
+    // systemd's ExecStart requires an absolute path or a $PATH-resolvable name - it does NOT
+    // resolve "./binary" against WorkingDirectory like a shell would. Wrapping in `bash -c`
+    // lets every game template keep writing simple relative start commands.
+    let escaped_command = start_command.replace('\'', "'\\''");
     format!(
         "[Unit]\n\
          Description=NovaNexus Gameserver Instance {instance_id}\n\
@@ -63,7 +67,7 @@ pub fn render_systemd_unit(instance_id: &str, working_dir: &str, start_command: 
          Type=simple\n\
          User=gameserver\n\
          WorkingDirectory={working_dir}\n\
-         ExecStart={start_command}\n\
+         ExecStart=/bin/bash -c '{escaped_command}'\n\
          Restart=on-failure\n\
          RestartSec=5\n\
          KillSignal=SIGTERM\n\
