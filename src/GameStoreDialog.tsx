@@ -56,8 +56,14 @@ export default function GameStoreDialog({ serverId, onClose, onInstalled }: Prop
                 disabled={installingId !== null}
                 onClick={() => install(game)}
               >
+                {installingId === game.id && <span className="nx-spinner" />}
                 {installingId === game.id ? "Installiere…" : "Installieren"}
               </button>
+              {installingId === game.id && (
+                <div style={{ color: "var(--nx-text-muted)", fontSize: 11, marginTop: 6 }}>
+                  Kann 1–2 Minuten dauern (Download & Einrichtung auf dem Server)
+                </div>
+              )}
             </div>
           ))}
         </div>

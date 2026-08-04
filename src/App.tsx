@@ -99,6 +99,8 @@ function App() {
   }
 
   useEffect(() => {
+    if (servers.length === 0) return;
+    pollHardwareStats();
     const interval = setInterval(pollHardwareStats, 8000);
     return () => clearInterval(interval);
   }, [servers]);
@@ -277,11 +279,14 @@ function App() {
             >
               <div className="nx-server-card-title">
                 <span>{server.name}</span>
-                <span className="nx-status-dot" style={{ background: s ? "var(--nx-accent)" : "var(--nx-text-muted)" }} />
+                <span
+                  className={`nx-status-dot ${s ? "" : "nx-pulse"}`}
+                  style={{ background: s ? "var(--nx-accent)" : "var(--nx-warning)" }}
+                />
               </div>
               <div className="nx-server-ip">{server.host}</div>
               <div style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
-                {s ? `CPU ${s.cpu_percent.toFixed(0)}% · RAM ${s.ram_used_mb}/${s.ram_total_mb} MB` : "Keine Live-Daten"}
+                {s ? `CPU ${s.cpu_percent.toFixed(0)}% · RAM ${s.ram_used_mb}/${s.ram_total_mb} MB` : "Verbinde…"}
               </div>
             </div>
           );
@@ -333,12 +338,23 @@ function App() {
                 const isActive = status?.state === "active";
                 const isFailed = status?.state === "failed";
                 const statusColor = isActive ? "var(--nx-accent)" : isFailed ? "var(--nx-danger)" : "var(--nx-text-muted)";
-                const statusLabel = isActive ? "Online" : isFailed ? "Fehler" : status ? "Gestoppt" : "Unbekannt";
+                const isBusy = instanceBusy === instance.id;
+                const statusLabel = isBusy
+                  ? isActive
+                    ? "Wird gestoppt…"
+                    : "Wird gestartet…"
+                  : isActive
+                  ? "Online"
+                  : isFailed
+                  ? "Fehler"
+                  : status
+                  ? "Gestoppt"
+                  : "Unbekannt";
                 return (
                   <div key={instance.id} className="nx-instance-card">
                     <div className="nx-instance-card-icon-row">
                       <GameIcon gameId={instance.game_id} size={40} />
-                      <label className="nx-toggle">
+                      <label className={`nx-toggle ${instanceBusy === instance.id ? "busy" : ""}`}>
                         <input
                           type="checkbox"
                           checked={isActive}
@@ -350,7 +366,8 @@ function App() {
                     </div>
                     <div className="nx-instance-card-title">{instance.display_name}</div>
                     <div style={{ fontSize: 12, color: statusColor, marginBottom: 2 }}>
-                      <span className="nx-status-dot" style={{ background: statusColor }} /> {statusLabel}
+                      {isBusy ? <span className="nx-spinner" /> : <span className="nx-status-dot" style={{ background: statusColor }} />}
+                      {statusLabel}
                     </div>
                     {status && <div className="nx-instance-card-sub">Uptime: {formatUptime(status.uptime_seconds)}</div>}
                     <div className="nx-instance-actions" style={{ marginTop: 10 }}>
