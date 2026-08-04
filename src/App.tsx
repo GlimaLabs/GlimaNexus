@@ -10,7 +10,7 @@ import InstanceDetail from "./InstanceDetail";
 import novaNexusLogo from "./assets/novanexus_logo2.png";
 import GameIcon from "./GameIcon";
 import DistroIcon from "./DistroIcon";
-import type { GameTemplate, InstanceRecord, InstanceStatus, LocalSystemStats, ServerRecord } from "./types";
+import type { GameTemplate, InstanceRecord, InstanceStatus, LocalSystemStats, ServerRecord, VersionInfo } from "./types";
 
 type HardwareStats = {
   cpu_percent: number;
@@ -68,6 +68,8 @@ function App() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [gameSubtitles, setGameSubtitles] = useState<Record<string, string>>({});
   const [gameTemplates, setGameTemplates] = useState<Record<string, GameTemplate>>({});
+  const [instanceVersions, setInstanceVersions] = useState<Record<string, VersionInfo>>({});
+  const [updatingInstanceId, setUpdatingInstanceId] = useState<string | null>(null);
   const [localStats, setLocalStats] = useState<LocalSystemStats | null>(null);
   const [localCpuHistory, setLocalCpuHistory] = useState<number[]>([]);
 
@@ -110,6 +112,49 @@ function App() {
     if (selectedServerId) loadInstances(selectedServerId);
     else setInstances([]);
   }, [selectedServerId]);
+
+  useEffect(() => {
+    if (!selectedServerId || instances.length === 0) return;
+    instances.forEach((instance) => {
+      invoke<VersionInfo>("get_instance_version", {
+        serverId: selectedServerId,
+        gameId: instance.game_id,
+        installPath: instance.install_path,
+      })
+        .then((info) => setInstanceVersions((prev) => ({ ...prev, [instance.id]: info })))
+        .catch(() => {});
+    });
+  }, [selectedServerId, instances]);
+
+  async function updateInstance(instance: InstanceRecord) {
+    if (!selectedServerId) return;
+    setUpdatingInstanceId(instance.id);
+    setInstanceError("");
+    try {
+      await invoke("update_instance", {
+        serverId: selectedServerId,
+        gameId: instance.game_id,
+        installPath: instance.install_path,
+        unitName: instance.systemd_unit,
+        ramLimitMb: instance.ram_limit_mb,
+      });
+      const info = await invoke<VersionInfo>("get_instance_version", {
+        serverId: selectedServerId,
+        gameId: instance.game_id,
+        installPath: instance.install_path,
+      });
+      setInstanceVersions((prev) => ({ ...prev, [instance.id]: info }));
+      const status = await invoke<InstanceStatus>("get_instance_status", {
+        serverId: selectedServerId,
+        unitName: instance.systemd_unit,
+      });
+      setInstanceStatus((prev) => ({ ...prev, [instance.id]: status }));
+    } catch (err) {
+      setInstanceError(`${instance.display_name}: ${String(err)}`);
+    } finally {
+      setUpdatingInstanceId(null);
+    }
+  }
 
   async function loadServers() {
     setLoading(true);
@@ -472,7 +517,28 @@ function App() {
                   <div key={instance.id} className="nx-instance-card">
                     <div className="nx-instance-card-icon-row">
                       <div className="nx-instance-icon-box">
-                        <GameIcon gameId={instance.game_id} size={32} />
+                        <GameIcon gameId={instance.game_id} size={38} />
+                      </div>
+                      <div className="nx-instance-card-info">
+                        <div className="nx-instance-card-title">{instance.display_name}</div>
+                        {(() => {
+                          const version = instanceVersions[instance.id];
+                          if (version?.installed) {
+                            return (
+                              <div className="nx-instance-card-subtitle">
+                                v{version.installed}{" "}
+                                <span title={version.up_to_date ? "Aktuell" : "Update verfügbar"}>
+                                  {version.up_to_date ? "✅" : "⬆️"}
+                                </span>
+                              </div>
+                            );
+                          }
+                          return (
+                            gameSubtitles[instance.game_id] && (
+                              <div className="nx-instance-card-subtitle">{gameSubtitles[instance.game_id]}</div>
+                            )
+                          );
+                        })()}
                       </div>
                       <label className={`nx-toggle ${instanceBusy === instance.id ? "busy" : ""}`}>
                         <input
@@ -484,17 +550,22 @@ function App() {
                         <span className="nx-toggle-slider" />
                       </label>
                     </div>
-                    <div className="nx-instance-card-title" style={{ marginBottom: 0 }}>{instance.display_name}</div>
-                    {gameSubtitles[instance.game_id] && (
-                      <div style={{ fontSize: 12, color: "var(--nx-text-muted)", marginBottom: 8 }}>
-                        {gameSubtitles[instance.game_id]}
-                      </div>
-                    )}
                     <div style={{ fontSize: 12, color: statusColor, marginBottom: 2 }}>
                       {isBusy ? <span className="nx-spinner" /> : <span className="nx-status-dot" style={{ background: statusColor }} />}
                       {statusLabel}
                     </div>
                     {status && <div className="nx-instance-card-sub">Uptime: {formatUptime(status.uptime_seconds)}</div>}
+                    {instanceVersions[instance.id] && !instanceVersions[instance.id].up_to_date && (
+                      <button
+                        className="nx-update-available-btn"
+                        disabled={updatingInstanceId === instance.id}
+                        onClick={() => updateInstance(instance)}
+                      >
+                        {updatingInstanceId === instance.id
+                          ? "Aktualisiert…"
+                          : `Update auf v${instanceVersions[instance.id].latest}`}
+                      </button>
+                    )}
                     <div className="nx-instance-actions" style={{ marginTop: 10 }}>
                       <button
                         style={{ flex: 1 }}

@@ -558,13 +558,13 @@
 }
 
 .nx-toggle input:checked + .nx-toggle-slider {
-  background: var(--nx-accent-soft);
-  border-color: var(--nx-accent);
+  background: var(--nx-success);
+  border-color: var(--nx-success);
 }
 
 .nx-toggle input:checked + .nx-toggle-slider::before {
   transform: translateX(16px);
-  background: var(--nx-accent);
+  background: #fff;
 }
 
 @keyframes nx-spin {
@@ -628,8 +628,8 @@
 
 .nx-instance-card-icon-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 10px;
 }
 
@@ -644,15 +644,42 @@
   justify-content: center;
 }
 
+.nx-instance-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .nx-instance-card-title {
   font-weight: 600;
-  margin-bottom: 4px;
+}
+
+.nx-instance-card-subtitle {
+  color: var(--nx-text-muted);
+  font-size: 12px;
 }
 
 .nx-instance-card-sub {
   color: var(--nx-text-muted);
   font-size: 12px;
   margin-bottom: 10px;
+}
+
+.nx-update-available-btn {
+  width: 100%;
+  margin-top: 6px;
+  background: var(--nx-accent-soft);
+  border: 1px solid var(--nx-accent);
+  color: var(--nx-accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px;
+  border-radius: var(--nx-radius);
+  cursor: pointer;
+}
+
+.nx-update-available-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .nx-instance-actions {

@@ -35,6 +35,12 @@ export type ConfigSchema = {
   fields: ConfigField[];
 };
 
+export type VersionInfo = {
+  installed: string | null;
+  latest: string | null;
+  up_to_date: boolean;
+};
+
 export type GameTemplate = {
   id: string;
   name: string;

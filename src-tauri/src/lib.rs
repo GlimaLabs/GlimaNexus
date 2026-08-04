@@ -330,6 +330,100 @@ async fn install_game(
     Ok(record)
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VersionInfo {
+    pub installed: Option<String>,
+    pub latest: Option<String>,
+    pub up_to_date: bool,
+}
+
+/// Module B: reports the installed vs. latest available version for a game instance, so the
+/// UI can show a real version number instead of a generic label and offer an update when
+/// they diverge. Only implemented for Paper (Minecraft) right now - other games' installed
+/// version isn't easily readable from a single file the way Paper's version_history.json is.
+#[tauri::command]
+async fn get_instance_version(
+    state: State<'_, AppState>,
+    server_id: String,
+    game_id: String,
+    install_path: String,
+) -> Result<VersionInfo, String> {
+    if game_id != "minecraft-paper" {
+        return Err("Für dieses Spiel gibt es noch keine Versionsanzeige".to_string());
+    }
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+
+    let history_path = format!("{install_path}/.paper/version_history.json");
+    let raw = session
+        .exec(&format!("sudo cat {} 2>/dev/null", games::shell_single_quote(&history_path)))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let installed = serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()
+        .and_then(|v| v.get("currentVersion").and_then(|s| s.as_str().map(String::from)))
+        .and_then(|s| {
+            // "26.2-92-0a99345 (MC: 26.2)" -> "26.2"
+            let start = s.find("MC: ")? + 4;
+            let end = s[start..].find(')')? + start;
+            Some(s[start..end].to_string())
+        });
+
+    let latest = session
+        .exec("curl -s https://fill.papermc.io/v3/projects/paper | jq -r '.versions | to_entries[0].value[0]'")
+        .await
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let up_to_date = match (&installed, &latest) {
+        (Some(i), Some(l)) => i == l,
+        _ => false,
+    };
+
+    Ok(VersionInfo { installed, latest, up_to_date })
+}
+
+/// Module B: re-runs a game instance's install steps (re-downloading the latest build) and
+/// restarts it - used by the "Update" action when get_instance_version reports a mismatch.
+#[tauri::command]
+async fn update_instance(
+    state: State<'_, AppState>,
+    server_id: String,
+    game_id: String,
+    install_path: String,
+    unit_name: String,
+    ram_limit_mb: u32,
+) -> Result<(), String> {
+    let template = games::find_template(&game_id).ok_or_else(|| format!("Unbekanntes Spiel: {game_id}"))?;
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+
+    provisioning::control_instance(session, &unit_name, "stop")
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // install_path already contains the instance id as its last path segment.
+    let instance_id = install_path.rsplit('/').next().unwrap_or_default();
+    for step in &template.install.steps {
+        let rendered = games::render_step(step, instance_id, ram_limit_mb);
+        let quoted = games::shell_single_quote(&rendered);
+        session
+            .exec(&format!("sudo -u gameserver bash -c {quoted}"))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    provisioning::control_instance(session, &unit_name, "start")
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 /// Module B: reads a game instance's config file over SSH and extracts the values for the
 /// fields declared in its template's config schema (falling back to defaults when a field
 /// or the file itself doesn't exist yet, e.g. right after install).
@@ -566,6 +660,8 @@ pub fn run() {
             list_games,
             list_instances,
             install_game,
+            get_instance_version,
+            update_instance,
             get_instance_config,
             save_instance_config,
             control_instance,
