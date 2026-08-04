@@ -362,17 +362,19 @@ function App() {
               className={`nx-server-card ${server.id === selectedServerId ? "selected" : ""}`}
               onClick={() => setSelectedServerId(server.id)}
             >
-              <div className="nx-server-card-title">
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <DistroIcon osInfo={server.os_info} size={20} />
-                  {server.name}
-                </span>
-                <span
-                  className={`nx-status-dot ${s ? "" : "nx-pulse"}`}
-                  style={{ background: s ? "var(--nx-success)" : "var(--nx-warning)" }}
-                />
+              <div className="nx-server-card-head">
+                <DistroIcon osInfo={server.os_info} size={34} />
+                <div className="nx-server-card-info">
+                  <div className="nx-server-card-title">
+                    <span>{server.name}</span>
+                    <span
+                      className={`nx-status-dot ${s ? "" : "nx-pulse"}`}
+                      style={{ background: s ? "var(--nx-success)" : "var(--nx-warning)" }}
+                    />
+                  </div>
+                  <div className="nx-server-ip">{server.host}</div>
+                </div>
               </div>
-              <div className="nx-server-ip">{server.host}</div>
               {s ? (
                 <div className="nx-server-meter-row">
                   <div className="nx-server-meter">

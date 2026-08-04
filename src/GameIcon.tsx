@@ -14,7 +14,7 @@ import vrisingIcon from "./assets/games/vrising.png";
 const ICONS: Record<string, string> = {
   "minecraft-paper": minecraftIcon,
   palworld: palworldIcon,
-  "7-days-to-die": sevenDaysIcon,
+  "7dtd": sevenDaysIcon,
   dayz: dayzIcon,
   factorio: factorioIcon,
   satisfactory: satisfactoryIcon,

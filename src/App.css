@@ -231,23 +231,34 @@
   background: var(--nx-accent-soft);
 }
 
+.nx-server-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.nx-server-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .nx-server-card-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-weight: 600;
-  margin-bottom: 4px;
 }
 
 .nx-server-ip {
   color: var(--nx-text-muted);
   font-size: 12px;
-  margin-bottom: 8px;
 }
 
 .nx-server-meter-row {
   display: flex;
   gap: 10px;
+  margin-left: 44px;
 }
 
 .nx-server-meter {
@@ -262,7 +273,7 @@
 }
 
 .nx-meter-track {
-  height: 4px;
+  height: 7px;
   background: var(--nx-panel-alt);
   border-radius: 999px;
   overflow: hidden;
