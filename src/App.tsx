@@ -43,6 +43,14 @@ function App() {
   const [instanceStatus, setInstanceStatus] = useState<Record<string, InstanceStatus>>({});
   const [instanceError, setInstanceError] = useState("");
   const [serverBusy, setServerBusy] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const close = () => setOpenMenuId(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [openMenuId]);
 
   useEffect(() => {
     loadServers();
@@ -310,92 +318,97 @@ function App() {
 
             {instanceError && <div className="nx-update-error">{instanceError}</div>}
 
-            {openInstanceId ? (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
+              <h3 style={{ margin: 0 }}>Installierte Gameserver</h3>
+              <button className="nx-update-btn" onClick={() => setShowStoreDialog(true)}>
+                + Neues Spiel installieren
+              </button>
+            </div>
+            {instances.length === 0 && (
+              <p style={{ color: "var(--nx-text-muted)" }}>Noch keine Gameserver installiert.</p>
+            )}
+            <div className="nx-instance-grid">
+              {instances.map((instance) => {
+                const status = instanceStatus[instance.id];
+                const isActive = status?.state === "active";
+                const isFailed = status?.state === "failed";
+                const statusColor = isActive ? "var(--nx-accent)" : isFailed ? "var(--nx-danger)" : "var(--nx-text-muted)";
+                const statusLabel = isActive ? "Online" : isFailed ? "Fehler" : status ? "Gestoppt" : "Unbekannt";
+                return (
+                  <div key={instance.id} className="nx-instance-card">
+                    <div className="nx-instance-card-icon-row">
+                      <GameIcon gameId={instance.game_id} size={40} />
+                      <label className="nx-toggle">
+                        <input
+                          type="checkbox"
+                          checked={isActive}
+                          disabled={instanceBusy === instance.id}
+                          onChange={() => runInstanceAction(instance, isActive ? "stop" : "start")}
+                        />
+                        <span className="nx-toggle-slider" />
+                      </label>
+                    </div>
+                    <div className="nx-instance-card-title">{instance.display_name}</div>
+                    <div style={{ fontSize: 12, color: statusColor, marginBottom: 2 }}>
+                      <span className="nx-status-dot" style={{ background: statusColor }} /> {statusLabel}
+                    </div>
+                    {status && <div className="nx-instance-card-sub">Uptime: {formatUptime(status.uptime_seconds)}</div>}
+                    <div className="nx-instance-actions" style={{ marginTop: 10 }}>
+                      <button
+                        style={{ flex: 1 }}
+                        onClick={() => setOpenInstanceId(openInstanceId === instance.id ? null : instance.id)}
+                      >
+                        Verwalten
+                      </button>
+                      <div style={{ position: "relative" }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(openMenuId === instance.id ? null : instance.id);
+                          }}
+                        >
+                          ⋯
+                        </button>
+                        {openMenuId === instance.id && (
+                          <div className="nx-context-menu" onClick={(e) => e.stopPropagation()}>
+                            <button disabled={instanceBusy === instance.id} onClick={() => { setOpenMenuId(null); runInstanceAction(instance, "restart"); }}>
+                              Neustart
+                            </button>
+                            <button disabled={instanceBusy === instance.id} onClick={() => { setOpenMenuId(null); handleForget(instance); }}>
+                              Entfernen
+                            </button>
+                            <button
+                              className="nx-btn-danger"
+                              disabled={instanceBusy === instance.id}
+                              onClick={() => { setOpenMenuId(null); handleUninstall(instance); }}
+                            >
+                              Deinstallieren
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {openInstanceId &&
               (() => {
                 const instance = instances.find((i) => i.id === openInstanceId);
                 return instance ? (
                   <InstanceDetail
                     serverId={selectedServer.id}
                     instance={instance}
+                    status={instanceStatus[instance.id]}
+                    busy={instanceBusy === instance.id}
                     cpuHistory={cpuHistory[selectedServer.id] ?? []}
                     ramHistory={ramHistory[selectedServer.id] ?? []}
+                    onAction={(action) => runInstanceAction(instance, action)}
                     onClose={() => setOpenInstanceId(null)}
                   />
                 ) : null;
-              })()
-            ) : (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
-                  <h3 style={{ margin: 0 }}>Installierte Gameserver</h3>
-                  <button className="nx-update-btn" onClick={() => setShowStoreDialog(true)}>
-                    + Neues Spiel installieren
-                  </button>
-                </div>
-                {instances.length === 0 && (
-                  <p style={{ color: "var(--nx-text-muted)" }}>Noch keine Gameserver installiert.</p>
-                )}
-                <div className="nx-instance-grid">
-                  {instances.map((instance) => {
-                    const status = instanceStatus[instance.id];
-                    const isActive = status?.state === "active";
-                    const isFailed = status?.state === "failed";
-                    const statusColor = isActive ? "var(--nx-accent)" : isFailed ? "var(--nx-danger)" : "var(--nx-text-muted)";
-                    const statusLabel = isActive ? "Online" : isFailed ? "Fehler" : status ? "Gestoppt" : "Unbekannt";
-                    return (
-                      <div key={instance.id} className="nx-instance-card">
-                        <div className="nx-instance-card-title">
-                          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <GameIcon gameId={instance.game_id} size={22} />
-                            {instance.display_name}
-                          </span>
-                          <label className="nx-toggle">
-                            <input
-                              type="checkbox"
-                              checked={isActive}
-                              disabled={instanceBusy === instance.id}
-                              onChange={() => runInstanceAction(instance, isActive ? "stop" : "start")}
-                            />
-                            <span className="nx-toggle-slider" />
-                          </label>
-                        </div>
-                        <div style={{ fontSize: 12, color: statusColor, marginBottom: 4 }}>
-                          <span className="nx-status-dot" style={{ background: statusColor }} /> {statusLabel}
-                        </div>
-                        {status && <div className="nx-instance-card-sub">Uptime: {formatUptime(status.uptime_seconds)}</div>}
-                        <div className="nx-instance-actions">
-                          <button
-                            disabled={instanceBusy === instance.id}
-                            onClick={() => runInstanceAction(instance, "restart")}
-                          >
-                            Neustart
-                          </button>
-                          <button onClick={() => setOpenInstanceId(instance.id)}>Verwalten</button>
-                        </div>
-                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                          <button
-                            style={{ flex: 1, fontSize: 12, background: "transparent", border: "1px solid var(--nx-border)", borderRadius: 6, padding: "6px 0" }}
-                            disabled={instanceBusy === instance.id}
-                            onClick={() => handleForget(instance)}
-                            title="Aus NovaNexus entfernen, Dateien bleiben auf dem Server"
-                          >
-                            Entfernen
-                          </button>
-                          <button
-                            className="nx-btn-danger"
-                            style={{ flex: 1, fontSize: 12, background: "transparent", border: "1px solid var(--nx-border)", borderRadius: 6, padding: "6px 0" }}
-                            disabled={instanceBusy === instance.id}
-                            onClick={() => handleUninstall(instance)}
-                            title="Dienst + alle Dateien unwiderruflich vom Server löschen"
-                          >
-                            Deinstallieren
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
+              })()}
           </div>
         ) : (
           <div className="nx-empty-state">

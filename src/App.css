@@ -456,12 +456,16 @@
   background: var(--nx-panel);
 }
 
+.nx-instance-card-icon-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
 .nx-instance-card-title {
   font-weight: 600;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  margin-bottom: 4px;
 }
 
 .nx-instance-card-sub {
@@ -476,13 +480,41 @@
 }
 
 .nx-instance-actions button {
-  flex: 1;
   border-radius: 6px;
   border: 1px solid var(--nx-border);
   background: var(--nx-panel-alt);
   color: var(--nx-text);
-  padding: 6px 0;
+  padding: 6px 10px;
   font-size: 12px;
+}
+
+.nx-context-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  background: var(--nx-panel);
+  border: 1px solid var(--nx-border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.nx-context-menu button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--nx-text);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.nx-context-menu button:hover {
+  background: var(--nx-panel-alt);
 }
 
 .nx-instance-detail {

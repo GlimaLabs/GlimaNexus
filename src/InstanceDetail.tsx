@@ -1,23 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
-import type { InstanceRecord } from "./types";
+import type { InstanceRecord, InstanceStatus } from "./types";
 
 type LogEvent = { event: "line"; text: string } | { event: "closed" };
 
 type Props = {
   serverId: string;
   instance: InstanceRecord;
+  status?: InstanceStatus;
+  busy: boolean;
   cpuHistory: number[];
   ramHistory: number[];
+  onAction: (action: "start" | "stop" | "restart") => void;
   onClose: () => void;
 };
 
-export default function InstanceDetail({ serverId, instance, cpuHistory, ramHistory, onClose }: Props) {
-  const [tab, setTab] = useState<"status" | "console">("status");
+export default function InstanceDetail({ serverId, instance, status, busy, cpuHistory, ramHistory, onAction, onClose }: Props) {
+  const [tab, setTab] = useState<"status" | "config" | "console">("status");
   const [lines, setLines] = useState<string[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const consoleRef = useRef<HTMLDivElement>(null);
   const startedRef = useRef(false);
+
+  const isActive = status?.state === "active";
+  const isFailed = status?.state === "failed";
+  const statusColor = isActive ? "var(--nx-accent)" : isFailed ? "var(--nx-danger)" : "var(--nx-text-muted)";
+  const statusLabel = isActive ? "Online" : isFailed ? "Fehler" : status ? "Gestoppt" : "Unbekannt";
 
   useEffect(() => {
     if (tab !== "console" || startedRef.current) return;
@@ -50,11 +58,31 @@ export default function InstanceDetail({ serverId, instance, cpuHistory, ramHist
           ← Zurück
         </button>
         <h2 style={{ margin: 0 }}>{instance.display_name}</h2>
+        <span style={{ fontSize: 12, color: statusColor }}>
+          <span className="nx-status-dot" style={{ background: statusColor }} /> {statusLabel}
+        </span>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          {isActive ? (
+            <button className="nx-btn-danger" disabled={busy} onClick={() => onAction("stop")}>
+              ⏸ Stoppen
+            </button>
+          ) : (
+            <button disabled={busy} onClick={() => onAction("start")}>
+              ▶ Starten
+            </button>
+          )}
+          <button disabled={busy} onClick={() => onAction("restart")}>
+            ⟳ Neustarten
+          </button>
+        </div>
       </div>
 
       <div className="nx-tabs">
         <button className={`nx-tab ${tab === "status" ? "active" : ""}`} onClick={() => setTab("status")}>
           Status & Ressourcen
+        </button>
+        <button className={`nx-tab ${tab === "config" ? "active" : ""}`} onClick={() => setTab("config")}>
+          Konfiguration
         </button>
         <button className={`nx-tab ${tab === "console" ? "active" : ""}`} onClick={() => setTab("console")}>
           Live-Konsole
@@ -78,6 +106,12 @@ export default function InstanceDetail({ serverId, instance, cpuHistory, ramHist
             <div>RAM Limit: {instance.ram_limit_mb} MB</div>
           </div>
         </div>
+      )}
+
+      {tab === "config" && (
+        <p style={{ color: "var(--nx-text-muted)" }}>
+          Konfigurationseditor folgt (Server-Properties/Config-Dateien direkt bearbeiten).
+        </p>
       )}
 
       {tab === "console" && (
