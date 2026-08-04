@@ -145,6 +145,48 @@
   padding: 12px;
   font-size: 12px;
   color: var(--nx-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nx-system-status-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--nx-text);
+}
+
+.nx-system-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nx-system-status-label {
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.nx-system-status-val {
+  margin-left: auto;
+  color: var(--nx-text);
+  white-space: nowrap;
+}
+
+.nx-system-status-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--nx-border);
+  overflow: hidden;
+}
+
+.nx-system-status-bar-fill {
+  height: 100%;
+  background: var(--nx-accent);
+  border-radius: 3px;
 }
 
 .nx-version {
@@ -580,6 +622,17 @@
   margin-bottom: 10px;
 }
 
+.nx-instance-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: var(--nx-panel-alt);
+  border: 1px solid var(--nx-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .nx-instance-card-title {
   font-weight: 600;
   margin-bottom: 4px;
@@ -738,22 +791,59 @@
   font-size: 11px;
 }
 
-.nx-disk-card {
+.nx-chart-card-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+}
+
+.nx-range-select {
+  background: var(--nx-panel-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text-muted);
+  border-radius: 6px;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+
+.nx-resource-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   margin-top: 14px;
+}
+
+.nx-resource-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 14px;
   border: 1px solid var(--nx-border);
   border-radius: var(--nx-radius);
   background: var(--nx-panel);
-  font-size: 13px;
+}
+
+.nx-resource-bar-icon {
+  font-size: 18px;
+}
+
+.nx-resource-bar-label {
+  font-size: 11px;
   color: var(--nx-text-muted);
 }
 
+.nx-resource-bar-value {
+  font-size: 14px;
+  color: var(--nx-text);
+  font-weight: 600;
+}
+
+.nx-resource-bar-disk .nx-resource-bar-value {
+  margin-bottom: 4px;
+}
+
 .nx-disk-bar {
-  flex: 1;
-  height: 8px;
+  height: 6px;
   background: var(--nx-panel-alt);
   border-radius: 999px;
   overflow: hidden;

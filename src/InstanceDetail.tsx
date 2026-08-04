@@ -13,6 +13,7 @@ type Props = {
   ramHistory: number[];
   diskUsedGb?: number;
   diskTotalGb?: number;
+  subtitle?: string;
   onAction: (action: "start" | "stop" | "restart") => void;
   onClose: () => void;
 };
@@ -26,6 +27,7 @@ export default function InstanceDetail({
   ramHistory,
   diskUsedGb,
   diskTotalGb,
+  subtitle,
   onAction,
   onClose,
 }: Props) {
@@ -41,6 +43,24 @@ export default function InstanceDetail({
   const isFailed = status?.state === "failed";
   const statusColor = isActive ? "var(--nx-success)" : isFailed ? "var(--nx-danger)" : "var(--nx-text-muted)";
   const statusLabel = isActive ? "Online" : isFailed ? "Fehler" : status ? "Gestoppt" : "Unbekannt";
+
+  function formatStartedAt(raw: string | null | undefined): string {
+    if (!raw) return "–";
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function formatUptimeShort(seconds: number): string {
+    if (seconds <= 0) return "–";
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    if (days > 0) return `${days}T ${hours}h ${minutes}m ${secs}s`;
+    if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+    return `${minutes}m ${secs}s`;
+  }
 
   useEffect(() => {
     if (tab !== "console" || startedForAttempt.current === logAttempt) return;
@@ -81,7 +101,10 @@ export default function InstanceDetail({
         <button className="nx-back-btn" onClick={onClose}>
           ← Zurück
         </button>
-        <h2 style={{ margin: 0 }}>{instance.display_name}</h2>
+        <h2 style={{ margin: 0 }}>
+          {instance.display_name}
+          {subtitle && <span style={{ fontWeight: 400, color: "var(--nx-text-muted)" }}> ({subtitle})</span>}
+        </h2>
         <span style={{ fontSize: 12, color: statusColor }}>
           <span className="nx-status-dot" style={{ background: statusColor }} /> {statusLabel}
         </span>
@@ -117,12 +140,22 @@ export default function InstanceDetail({
         <>
           <div className="nx-status-grid">
             <div className="nx-chart-card">
-              <div className="nx-chart-title">CPU Auslastung</div>
+              <div className="nx-chart-card-head">
+                <div className="nx-chart-title">CPU Auslastung</div>
+                <select className="nx-range-select" disabled defaultValue="1h">
+                  <option value="1h">1 Stunde</option>
+                </select>
+              </div>
               <div className="nx-chart-value">{(cpuHistory[cpuHistory.length - 1] ?? 0).toFixed(0)}%</div>
               <Sparkline values={cpuHistory} max={Math.max(100, instance.cpu_limit_percent)} />
             </div>
             <div className="nx-chart-card">
-              <div className="nx-chart-title">RAM Auslastung</div>
+              <div className="nx-chart-card-head">
+                <div className="nx-chart-title">RAM Auslastung</div>
+                <select className="nx-range-select" disabled defaultValue="1h">
+                  <option value="1h">1 Stunde</option>
+                </select>
+              </div>
               <div className="nx-chart-value">
                 {((ramHistory[ramHistory.length - 1] ?? 0) / 1024).toFixed(1)} GB
                 <span className="nx-chart-value-max"> / {(instance.ram_limit_mb / 1024).toFixed(0)} GB</span>
@@ -131,35 +164,61 @@ export default function InstanceDetail({
             </div>
             <div className="nx-fact-card">
               <div className="nx-fact-row">
-                <span>Install-Pfad</span>
-                <span title={instance.install_path}>…{instance.install_path.slice(-24)}</span>
+                <span>Prozess ID</span>
+                <span>{status?.pid ?? "–"}</span>
+              </div>
+              <div className="nx-fact-row" title="Nur für Minecraft verfügbar (später)">
+                <span>Spieler Online</span>
+                <span>–</span>
+              </div>
+              <div className="nx-fact-row" title="Nur für Minecraft verfügbar (später)">
+                <span>Welt</span>
+                <span>–</span>
               </div>
               <div className="nx-fact-row">
-                <span>Systemd-Unit</span>
-                <span title={instance.systemd_unit}>…{instance.systemd_unit.slice(-18)}</span>
+                <span>Startzeit</span>
+                <span>{formatStartedAt(status?.started_at)}</span>
               </div>
               <div className="nx-fact-row">
-                <span>CPU Limit</span>
-                <span>{instance.cpu_limit_percent}%</span>
-              </div>
-              <div className="nx-fact-row">
-                <span>RAM Limit</span>
-                <span>{instance.ram_limit_mb} MB</span>
+                <span>Laufzeit</span>
+                <span>{formatUptimeShort(status?.uptime_seconds ?? 0)}</span>
               </div>
             </div>
           </div>
 
-          {diskTotalGb !== undefined && diskTotalGb > 0 && (
-            <div className="nx-disk-card">
-              <span>💾 Speicherplatz (Server)</span>
-              <div className="nx-disk-bar">
-                <div className="nx-disk-bar-fill" style={{ width: `${Math.min(100, ((diskUsedGb ?? 0) / diskTotalGb) * 100)}%` }} />
+          <div className="nx-resource-bar">
+            <div className="nx-resource-bar-item">
+              <span className="nx-resource-bar-icon">⚙️</span>
+              <div>
+                <div className="nx-resource-bar-label">CPU Limit</div>
+                <div className="nx-resource-bar-value">{instance.cpu_limit_percent}%</div>
               </div>
-              <span>
-                {diskUsedGb} GB / {diskTotalGb} GB
-              </span>
             </div>
-          )}
+            <div className="nx-resource-bar-item">
+              <span className="nx-resource-bar-icon">🧠</span>
+              <div>
+                <div className="nx-resource-bar-label">RAM Limit</div>
+                <div className="nx-resource-bar-value">{instance.ram_limit_mb} MB</div>
+              </div>
+            </div>
+            {diskTotalGb !== undefined && diskTotalGb > 0 && (
+              <div className="nx-resource-bar-item nx-resource-bar-disk">
+                <span className="nx-resource-bar-icon">💾</span>
+                <div style={{ flex: 1 }}>
+                  <div className="nx-resource-bar-label">Speicherplatz</div>
+                  <div className="nx-resource-bar-value">
+                    {diskUsedGb} GB / {diskTotalGb} GB
+                  </div>
+                  <div className="nx-disk-bar">
+                    <div
+                      className="nx-disk-bar-fill"
+                      style={{ width: `${Math.min(100, ((diskUsedGb ?? 0) / diskTotalGb) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </>
       )}
 
@@ -196,21 +255,29 @@ export default function InstanceDetail({
 
 function Sparkline({ values, max }: { values: number[]; max: number }) {
   const width = 240;
-  const height = 60;
+  const height = 90;
+  const gradientId = "nx-spark-fill";
   if (values.length === 0) {
     return <div style={{ color: "var(--nx-text-muted)", fontSize: 12 }}>Noch keine Daten</div>;
   }
-  const points = values
-    .map((v, i) => {
-      const x = (i / Math.max(1, values.length - 1)) * width;
-      const y = height - (Math.min(v, max) / max) * height;
-      return `${x},${y}`;
-    })
-    .join(" ");
+  const coords = values.map((v, i) => {
+    const x = (i / Math.max(1, values.length - 1)) * width;
+    const y = height - (Math.min(v, max) / max) * height;
+    return [x, y];
+  });
+  const linePoints = coords.map(([x, y]) => `${x},${y}`).join(" ");
+  const areaPoints = `0,${height} ${linePoints} ${width},${height}`;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      <polyline points={points} fill="none" stroke="var(--nx-accent)" strokeWidth="2" />
+    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--nx-accent)" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="var(--nx-accent)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={areaPoints} fill={`url(#${gradientId})`} />
+      <polyline points={linePoints} fill="none" stroke="var(--nx-accent)" strokeWidth="2" />
     </svg>
   );
 }

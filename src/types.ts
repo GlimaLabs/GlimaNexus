@@ -10,6 +10,16 @@ export type ServerRecord = {
 export type InstanceStatus = {
   state: string;
   uptime_seconds: number;
+  pid: number | null;
+  started_at: string | null;
+};
+
+export type LocalSystemStats = {
+  cpu_percent: number;
+  ram_used_mb: number;
+  ram_total_mb: number;
+  net_up_kbps: number;
+  net_down_kbps: number;
 };
 
 export type GameTemplate = {

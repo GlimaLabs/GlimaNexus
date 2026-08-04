@@ -9,7 +9,8 @@ import GameStoreDialog from "./GameStoreDialog";
 import InstanceDetail from "./InstanceDetail";
 import novaNexusLogo from "./assets/novanexus_logo2.png";
 import GameIcon from "./GameIcon";
-import type { InstanceRecord, InstanceStatus, ServerRecord } from "./types";
+import DistroIcon from "./DistroIcon";
+import type { GameTemplate, InstanceRecord, InstanceStatus, LocalSystemStats, ServerRecord } from "./types";
 
 type HardwareStats = {
   cpu_percent: number;
@@ -29,6 +30,25 @@ function formatUptime(seconds: number): string {
   return `${minutes}m`;
 }
 
+function MiniSparkline({ values }: { values: number[] }) {
+  const width = 48;
+  const height = 16;
+  if (values.length < 2) return <svg width={width} height={height} />;
+  const max = Math.max(100, ...values);
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = height - (v / max) * height;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      <polyline points={points} fill="none" stroke="var(--nx-accent)" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 function App() {
   const [servers, setServers] = useState<ServerRecord[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
@@ -46,6 +66,29 @@ function App() {
   const [instanceError, setInstanceError] = useState("");
   const [serverBusy, setServerBusy] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [gameSubtitles, setGameSubtitles] = useState<Record<string, string>>({});
+  const [localStats, setLocalStats] = useState<LocalSystemStats | null>(null);
+  const [localCpuHistory, setLocalCpuHistory] = useState<number[]>([]);
+
+  useEffect(() => {
+    const poll = () => {
+      invoke<LocalSystemStats>("get_local_system_stats")
+        .then((result) => {
+          setLocalStats(result);
+          setLocalCpuHistory((prev) => [...prev.slice(-19), result.cpu_percent]);
+        })
+        .catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    invoke<GameTemplate[]>("list_games")
+      .then((games) => setGameSubtitles(Object.fromEntries(games.map((g) => [g.id, g.subtitle]))))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -254,6 +297,39 @@ function App() {
             </div>
           </div>
 
+          {localStats && (
+            <div className="nx-system-status">
+              <div className="nx-system-status-title">
+                <span>🖥️</span> System Status
+              </div>
+              <div className="nx-system-status-row">
+                <span className="nx-system-status-label">CPU</span>
+                <span className="nx-system-status-val">{localStats.cpu_percent.toFixed(0)}%</span>
+                <MiniSparkline values={localCpuHistory} />
+              </div>
+              <div className="nx-system-status-row">
+                <span className="nx-system-status-label">RAM</span>
+                <div className="nx-system-status-bar">
+                  <div
+                    className="nx-system-status-bar-fill"
+                    style={{
+                      width: `${Math.min(100, (localStats.ram_used_mb / Math.max(1, localStats.ram_total_mb)) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <span className="nx-system-status-val">
+                  {(localStats.ram_used_mb / 1024).toFixed(1)} GB / {(localStats.ram_total_mb / 1024).toFixed(0)} GB
+                </span>
+              </div>
+              <div className="nx-system-status-row">
+                <span className="nx-system-status-label">Netzwerk</span>
+                <span className="nx-system-status-val">
+                  ↑ {localStats.net_up_kbps.toFixed(0)} KB/s &nbsp; ↓ {localStats.net_down_kbps.toFixed(0)} KB/s
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="nx-version">{appVersion ? `v${appVersion}` : ""}</div>
         </div>
       </aside>
@@ -283,7 +359,10 @@ function App() {
               onClick={() => setSelectedServerId(server.id)}
             >
               <div className="nx-server-card-title">
-                <span>{server.name}</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <DistroIcon osInfo={server.os_info} size={20} />
+                  {server.name}
+                </span>
                 <span
                   className={`nx-status-dot ${s ? "" : "nx-pulse"}`}
                   style={{ background: s ? "var(--nx-success)" : "var(--nx-warning)" }}
@@ -317,7 +396,9 @@ function App() {
         {selectedServer ? (
           <div>
             <div className="nx-server-header">
-              <div className="nx-server-header-icon">🐧</div>
+              <div className="nx-server-header-icon">
+                <DistroIcon osInfo={selectedServer.os_info} size={28} />
+              </div>
               <div className="nx-server-header-info">
                 <h1>{selectedServer.name}</h1>
                 <p>
@@ -384,7 +465,9 @@ function App() {
                 return (
                   <div key={instance.id} className="nx-instance-card">
                     <div className="nx-instance-card-icon-row">
-                      <GameIcon gameId={instance.game_id} size={40} />
+                      <div className="nx-instance-icon-box">
+                        <GameIcon gameId={instance.game_id} size={32} />
+                      </div>
                       <label className={`nx-toggle ${instanceBusy === instance.id ? "busy" : ""}`}>
                         <input
                           type="checkbox"
@@ -395,7 +478,12 @@ function App() {
                         <span className="nx-toggle-slider" />
                       </label>
                     </div>
-                    <div className="nx-instance-card-title">{instance.display_name}</div>
+                    <div className="nx-instance-card-title" style={{ marginBottom: 0 }}>{instance.display_name}</div>
+                    {gameSubtitles[instance.game_id] && (
+                      <div style={{ fontSize: 12, color: "var(--nx-text-muted)", marginBottom: 8 }}>
+                        {gameSubtitles[instance.game_id]}
+                      </div>
+                    )}
                     <div style={{ fontSize: 12, color: statusColor, marginBottom: 2 }}>
                       {isBusy ? <span className="nx-spinner" /> : <span className="nx-status-dot" style={{ background: statusColor }} />}
                       {statusLabel}
@@ -454,6 +542,7 @@ function App() {
                     ramHistory={ramHistory[selectedServer.id] ?? []}
                     diskUsedGb={selectedStats?.disk_used_gb}
                     diskTotalGb={selectedStats?.disk_total_gb}
+                    subtitle={gameSubtitles[instance.game_id]}
                     onAction={(action) => runInstanceAction(instance, action)}
                     onClose={() => setOpenInstanceId(null)}
                   />

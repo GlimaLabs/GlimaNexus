@@ -21,6 +21,27 @@ pub struct AppState {
     /// single poll (CPU/RAM every 8s, instance status every 5s) - that reconnect overhead is
     /// what made the UI feel laggy under frequent polling.
     pub ssh_pool: Mutex<HashMap<String, SessionSlot>>,
+    /// Kept alive across polls (not re-created per call) so sysinfo's CPU/network deltas are
+    /// measured against the previous poll instead of needing an artificial sleep every time.
+    pub local_sys: Mutex<LocalSystemMonitor>,
+}
+
+pub struct LocalSystemMonitor {
+    pub sys: sysinfo::System,
+    pub networks: sysinfo::Networks,
+    pub last_net_bytes: (u64, u64), // (received, transmitted)
+    pub last_poll: std::time::Instant,
+}
+
+impl LocalSystemMonitor {
+    fn new() -> Self {
+        Self {
+            sys: sysinfo::System::new_all(),
+            networks: sysinfo::Networks::new_with_refreshed_list(),
+            last_net_bytes: (0, 0),
+            last_poll: std::time::Instant::now(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -30,6 +51,45 @@ pub struct HardwareStats {
     pub ram_total_mb: u64,
     pub disk_used_gb: u64,
     pub disk_total_gb: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LocalSystemStats {
+    pub cpu_percent: f32,
+    pub ram_used_mb: u64,
+    pub ram_total_mb: u64,
+    pub net_up_kbps: f64,
+    pub net_down_kbps: f64,
+}
+
+/// Reads CPU/RAM/network usage of the machine NovaNexus itself is running on
+/// (not a managed server) for the sidebar's local System Status widget.
+#[tauri::command]
+fn get_local_system_stats(state: State<'_, AppState>) -> Result<LocalSystemStats, String> {
+    let mut monitor = state.local_sys.lock().map_err(|e| e.to_string())?;
+
+    monitor.sys.refresh_cpu_usage();
+    monitor.sys.refresh_memory();
+    monitor.networks.refresh();
+
+    let cpu_percent = monitor.sys.global_cpu_usage();
+    let ram_used_mb = monitor.sys.used_memory() / 1024 / 1024;
+    let ram_total_mb = monitor.sys.total_memory() / 1024 / 1024;
+
+    let (received, transmitted) = monitor
+        .networks
+        .values()
+        .fold((0u64, 0u64), |(r, t), n| (r + n.total_received(), t + n.total_transmitted()));
+
+    let elapsed = monitor.last_poll.elapsed().as_secs_f64().max(0.001);
+    let (last_r, last_t) = monitor.last_net_bytes;
+    let net_down_kbps = if last_r > 0 { (received.saturating_sub(last_r)) as f64 / 1024.0 / elapsed } else { 0.0 };
+    let net_up_kbps = if last_t > 0 { (transmitted.saturating_sub(last_t)) as f64 / 1024.0 / elapsed } else { 0.0 };
+
+    monitor.last_net_bytes = (received, transmitted);
+    monitor.last_poll = std::time::Instant::now();
+
+    Ok(LocalSystemStats { cpu_percent, ram_used_mb, ram_total_mb, net_up_kbps, net_down_kbps })
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -288,6 +348,8 @@ async fn control_instance(state: State<'_, AppState>, server_id: String, unit_na
 pub struct InstanceStatus {
     pub state: String,
     pub uptime_seconds: i64,
+    pub pid: Option<i64>,
+    pub started_at: Option<String>,
 }
 
 /// Module C: reports whether a game instance's systemd unit is currently running
@@ -301,10 +363,11 @@ async fn get_instance_status(state: State<'_, AppState>, server_id: String, unit
         .exec(&format!(
             "STATE=$(systemctl is-active {unit_name}); \
              TS=$(systemctl show -p ActiveEnterTimestamp --value {unit_name}); \
+             PID=$(systemctl show -p MainPID --value {unit_name}); \
              if [ -n \"$TS\" ] && [ \"$TS\" != \"n/a\" ]; then \
                NOW=$(date +%s); THEN=$(date -d \"$TS\" +%s 2>/dev/null || echo $NOW); UPTIME=$((NOW-THEN)); \
              else UPTIME=0; fi; \
-             echo \"$STATE|$UPTIME\""
+             echo \"$STATE|$UPTIME|$PID|$TS\""
         ))
         .await;
 
@@ -316,10 +379,12 @@ async fn get_instance_status(state: State<'_, AppState>, server_id: String, unit
         }
     };
 
-    let mut parts = output.trim().split('|');
+    let mut parts = output.trim().splitn(4, '|');
     let state = parts.next().unwrap_or("unknown").to_string();
     let uptime_seconds = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
-    Ok(InstanceStatus { state, uptime_seconds })
+    let pid = parts.next().and_then(|v| v.parse::<i64>().ok()).filter(|&p| p != 0);
+    let started_at = parts.next().map(|v| v.trim().to_string()).filter(|v| !v.is_empty() && v != "n/a");
+    Ok(InstanceStatus { state, uptime_seconds, pid, started_at })
 }
 
 /// Guards against ever running `rm -rf` on something wider than a single instance's own
@@ -416,10 +481,15 @@ pub fn run() {
             let db_path = app_data_dir.join("novanexus.db");
             let db_key = keyring_store::get_or_create_db_key()?;
             let db = Db::open(db_path, &db_key)?;
-            app.manage(AppState { db: Mutex::new(db), ssh_pool: Mutex::new(HashMap::new()) });
+            app.manage(AppState {
+                db: Mutex::new(db),
+                ssh_pool: Mutex::new(HashMap::new()),
+                local_sys: Mutex::new(LocalSystemMonitor::new()),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_local_system_stats,
             add_server,
             list_servers,
             delete_server,

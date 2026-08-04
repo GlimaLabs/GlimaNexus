@@ -1,6 +1,6 @@
 [package]
 name = "novanexus"
-version = "0.1.16"
+version = "0.1.17"
 description = "NovaNexus - ServerManager für Gamer"
 authors = ["State-of-Economy"]
 license = "GPL-3.0"
@@ -40,6 +40,9 @@ keyring = { version = "3", features = ["windows-native"] }
 
 # Encrypted local database (SQLCipher via bundled OpenSSL)
 rusqlite = { version = "0.31", features = ["bundled-sqlcipher"] }
+
+# Local machine system stats (CPU/RAM/network) for the sidebar status widget
+sysinfo = "0.32"
 
 anyhow = "1"
 thiserror = "1"
