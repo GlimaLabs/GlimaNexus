@@ -42,3 +42,9 @@ pub fn render_step(template: &str, instance_id: &str, ram_limit_mb: u32) -> Stri
         .replace("{instance_id}", instance_id)
         .replace("{ram_limit_mb}", &ram_limit_mb.to_string())
 }
+
+/// Safely wraps a shell command in single quotes for embedding inside another shell command
+/// (e.g. `sudo -u gameserver bash -c '<here>'`), escaping any single quotes it contains.
+pub fn shell_single_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}

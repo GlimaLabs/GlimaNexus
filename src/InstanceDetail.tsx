@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type { InstanceRecord } from "./types";
 
-type LogEvent = { event: "line"; data: { text: string } } | { event: "closed" };
+type LogEvent = { event: "line"; text: string } | { event: "closed" };
 
 type Props = {
   serverId: string;
@@ -26,7 +26,7 @@ export default function InstanceDetail({ serverId, instance, cpuHistory, ramHist
     const channel = new Channel<LogEvent>();
     channel.onmessage = (event) => {
       if (event.event === "line") {
-        setLines((prev) => [...prev.slice(-499), event.data.text]);
+        setLines((prev) => [...prev.slice(-499), event.text]);
       }
     };
 

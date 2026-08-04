@@ -175,13 +175,28 @@ async fn install_game(
 
     let instance_id = uuid::Uuid::new_v4().to_string();
     let ram_limit_mb = template.default_ram_limit_mb;
+    let install_path = format!("/home/gameserver/instances/{instance_id}");
+
+    // /home/gameserver is owned by root (created via `useradd -m`), so the admin's own
+    // login user can't write into it. Create the instance dir with the right owner first,
+    // then run every install step as the `gameserver` user itself so downloaded files end
+    // up owned by the account that will actually run the service.
+    session
+        .exec(&format!(
+            "sudo mkdir -p {install_path} && sudo chown gameserver:gameserver {install_path}"
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
 
     for step in &template.install.steps {
         let rendered = games::render_step(step, &instance_id, ram_limit_mb);
-        session.exec(&rendered).await.map_err(|e| e.to_string())?;
+        let quoted = games::shell_single_quote(&rendered);
+        session
+            .exec(&format!("sudo -u gameserver bash -c {quoted}"))
+            .await
+            .map_err(|e| e.to_string())?;
     }
 
-    let install_path = format!("/home/gameserver/instances/{instance_id}");
     let start_command = games::render_step(&template.start_command, &instance_id, ram_limit_mb);
     let unit_name = format!("novanexus-{instance_id}");
     let unit_contents = provisioning::render_systemd_unit(&instance_id, &install_path, &start_command);
