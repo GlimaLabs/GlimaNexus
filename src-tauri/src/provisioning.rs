@@ -65,7 +65,10 @@ pub fn render_systemd_unit(instance_id: &str, working_dir: &str, start_command: 
          WorkingDirectory={working_dir}\n\
          ExecStart={start_command}\n\
          Restart=on-failure\n\
-         RestartSec=5\n\n\
+         RestartSec=5\n\
+         KillSignal=SIGTERM\n\
+         TimeoutStopSec=60\n\
+         SuccessExitStatus=143\n\n\
          [Install]\n\
          WantedBy=multi-user.target\n"
     )
