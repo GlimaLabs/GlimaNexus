@@ -30,25 +30,76 @@ pub async fn ensure_passwordless_sudo(ssh: &mut SshSession, username: &str, pass
     Ok(())
 }
 
+/// The Linux distro families we know how to provision. Add a new variant + match arm in
+/// `detect_distro_family`/`bootstrap_server` to support another one - the rest of the app
+/// (SSH, systemd units, game installs) is already distro-agnostic once this step succeeds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DistroFamily {
+    /// Ubuntu, Debian, and derivatives (apt/dpkg).
+    Debian,
+    /// Fedora, RHEL, CentOS Stream, Rocky, AlmaLinux (dnf).
+    Fedora,
+}
+
+/// Reads `/etc/os-release`'s ID and ID_LIKE fields to classify the server into a distro
+/// family. Checked against both fields since derivatives (e.g. Linux Mint, Rocky Linux)
+/// often only declare their parent in ID_LIKE, not ID itself.
+pub async fn detect_distro_family(ssh: &mut SshSession) -> Result<DistroFamily> {
+    let raw = ssh
+        .exec("grep -E '^(ID|ID_LIKE)=' /etc/os-release")
+        .await?
+        .to_lowercase();
+
+    if raw.contains("debian") || raw.contains("ubuntu") {
+        Ok(DistroFamily::Debian)
+    } else if raw.contains("fedora") || raw.contains("rhel") || raw.contains("centos") {
+        Ok(DistroFamily::Fedora)
+    } else {
+        Err(anyhow::anyhow!(
+            "Diese Linux-Distribution wird noch nicht unterstützt (erkannt: {}). \
+             Aktuell unterstützt: Ubuntu/Debian und Fedora/RHEL/CentOS/Rocky/AlmaLinux.",
+            raw.trim()
+        ))
+    }
+}
+
 /// Creates the isolated `gameserver` system user (no root execution of game processes)
-/// and installs base dependencies (SteamCMD, Java, lib32 packages) on a fresh Ubuntu/Debian box.
+/// and installs base dependencies (Java, 32-bit libs for SteamCMD/game binaries) using
+/// the right package manager for the detected distro family.
 pub async fn bootstrap_server(ssh: &mut SshSession) -> Result<()> {
     ssh.exec("id -u gameserver &>/dev/null || sudo useradd -m -s /bin/bash gameserver").await?;
-    ssh.exec("sudo apt-get update -y").await?;
+
+    let family = detect_distro_family(ssh).await?;
+    match family {
+        DistroFamily::Debian => {
+            ssh.exec("sudo apt-get update -y").await?;
+            ssh.exec(
+                "sudo apt-get install -y curl wget tar unzip jq openjdk-21-jre-headless openjdk-25-jre-headless \
+                 software-properties-common lib32gcc-s1 lib32stdc++6",
+            )
+            .await?;
+        }
+        DistroFamily::Fedora => {
+            ssh.exec(
+                "sudo dnf install -y curl wget tar unzip jq java-21-openjdk-headless java-latest-openjdk-headless \
+                 glibc.i686 libstdc++.i686 ncurses-libs.i686",
+            )
+            .await?;
+        }
+    }
+
+    // SteamCMD installed via Valve's own tarball into a fixed path, identical across every
+    // distro - sidesteps package-manager differences entirely (and the Ubuntu `steamcmd`
+    // package's /usr/games/steamcmd not being on the non-interactive SSH $PATH, which bit
+    // us before).
     ssh.exec(
-        "sudo apt-get install -y curl wget tar unzip jq openjdk-21-jre-headless openjdk-25-jre-headless \
-         software-properties-common lib32gcc-s1 lib32stdc++6",
+        "test -x /home/gameserver/.steamcmd/steamcmd.sh || \
+         sudo -u gameserver bash -c \"mkdir -p /home/gameserver/.steamcmd && \
+         cd /home/gameserver/.steamcmd && \
+         curl -sqL 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz' | tar zxf -\"",
     )
     .await?;
-    ssh.exec(
-        "command -v steamcmd &>/dev/null || \
-         (sudo add-apt-repository -y multiverse && \
-          sudo dpkg --add-architecture i386 && \
-          sudo apt-get update -y && \
-          echo steam steam/question select \"I AGREE\" | sudo debconf-set-selections && \
-          sudo apt-get install -y steamcmd)",
-    )
-    .await?;
+
     Ok(())
 }
 
