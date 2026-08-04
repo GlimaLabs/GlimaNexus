@@ -688,7 +688,11 @@ function App() {
                     ramHistory={ramHistory[selectedServer.id] ?? []}
                     diskUsedGb={selectedStats?.disk_used_gb}
                     diskTotalGb={selectedStats?.disk_total_gb}
-                    subtitle={gameSubtitles[instance.game_id]}
+                    subtitle={
+                      instanceVersions[instance.id]?.installed
+                        ? `v${instanceVersions[instance.id].installed}`
+                        : gameSubtitles[instance.game_id]
+                    }
                     configSchema={gameTemplates[instance.game_id]?.config}
                     onAction={(action) => runInstanceAction(instance, action)}
                     onClose={() => setOpenInstanceId(null)}
