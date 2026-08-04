@@ -3,13 +3,13 @@
     {
       "id": "minecraft-paper",
       "name": "Minecraft",
-      "subtitle": "Paper 1.20.4",
+      "subtitle": "Paper (aktuellste Version)",
       "icon": "minecraft.png",
       "requires": ["java21"],
       "install": {
         "type": "direct-download",
         "steps": [
-          "cd /home/gameserver/instances/{instance_id} && URL=$(curl -s https://fill.papermc.io/v3/projects/paper/versions/1.20.4/builds | jq -r '.[0].downloads[\"server:default\"].url') && curl -o paper.jar \"$URL\"",
+          "cd /home/gameserver/instances/{instance_id} && VERSION=$(curl -s https://fill.papermc.io/v3/projects/paper | jq -r '.versions | to_entries[0].value[0]') && URL=$(curl -s https://fill.papermc.io/v3/projects/paper/versions/$VERSION/builds | jq -r '.[0].downloads[\"server:default\"].url') && curl -o paper.jar \"$URL\"",
           "cd /home/gameserver/instances/{instance_id} && echo 'eula=true' > eula.txt"
         ]
       },

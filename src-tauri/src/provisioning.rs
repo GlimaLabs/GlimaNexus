@@ -36,7 +36,7 @@ pub async fn bootstrap_server(ssh: &mut SshSession) -> Result<()> {
     ssh.exec("id -u gameserver &>/dev/null || sudo useradd -m -s /bin/bash gameserver").await?;
     ssh.exec("sudo apt-get update -y").await?;
     ssh.exec(
-        "sudo apt-get install -y curl wget tar unzip jq openjdk-21-jre-headless \
+        "sudo apt-get install -y curl wget tar unzip jq openjdk-21-jre-headless openjdk-25-jre-headless \
          software-properties-common lib32gcc-s1 lib32stdc++6",
     )
     .await?;
