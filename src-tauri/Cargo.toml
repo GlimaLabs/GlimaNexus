@@ -1,6 +1,6 @@
 [package]
 name = "glimanexus"
-version = "0.1.22"
+version = "0.1.23"
 description = "GlimaNexus - ServerManager für Gamer"
 authors = ["GlimaLabs"]
 license = "GPL-3.0"

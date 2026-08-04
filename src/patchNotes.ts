@@ -8,6 +8,18 @@ export type PatchNote = {
 // newest first. Not every internal commit needs its own entry.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "0.1.23",
+    date: "2026-08-05",
+    items: [
+      "Umbenannt zu GlimaNexus (vorher NovaNexus) - bestehende Installationen brauchen einmalig den neuen Installer und müssen Server-Passwörter neu eingeben",
+      "Unterstützung für Fedora/RHEL/CentOS/Rocky/AlmaLinux-Server zusätzlich zu Ubuntu/Debian",
+      "Firewall-Ports werden beim Installieren und bei Port-Änderungen automatisch freigegeben (ufw/firewalld)",
+      "Server ohne Swap bekommen automatisch eine 2 GB Swap-Datei, damit RAM-Spitzen nicht den Gameserver killen",
+      "Neuer Backup-Manager: Server-Backups erstellen, herunterladen und löschen",
+      "Neue einfache Verzeichnis-Ansicht für Hauptverzeichnis und Backup-Ordner übers ⋯-Menü",
+    ],
+  },
+  {
     version: "0.1.22",
     date: "2026-08-04",
     items: [
