@@ -340,9 +340,144 @@ async fn install_game(
         ram_limit_mb,
     };
 
+    // Write a small manifest alongside the game files themselves, so this instance can be
+    // rediscovered (via `discover_instances`) even if the local database is ever lost -
+    // ports/systemd/the game itself all live entirely on the server; only this metadata
+    // (which game, display name, limits) previously existed nowhere but our local SQLite DB.
+    let manifest = serde_json::json!({
+        "instance_id": record.id,
+        "game_id": record.game_id,
+        "display_name": record.display_name,
+        "cpu_limit_percent": record.cpu_limit_percent,
+        "ram_limit_mb": record.ram_limit_mb,
+    });
+    let manifest_path = format!("{}/.glimanexus-instance.json", record.install_path);
+    let _ = session
+        .exec_with_stdin(
+            &format!("sudo -u gameserver tee {} > /dev/null", games::shell_single_quote(&manifest_path)),
+            manifest.to_string().as_bytes(),
+        )
+        .await;
+
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.insert_instance(&record).map_err(|e| e.to_string())?;
     Ok(record)
+}
+
+/// Extracts the file a template's start command would run, relative to the install directory,
+/// so `discover_instances` can test for its existence to guess a game when there's no manifest.
+/// Handles both `./binary args...` and `java ... -jar name.jar ...` style commands - covers
+/// every current template.
+fn signature_path_for_template(t: &GameTemplate) -> Option<String> {
+    if let Some(rest) = t.start_command.strip_prefix("./") {
+        return rest.split_whitespace().next().map(|s| s.to_string());
+    }
+    if let Some(idx) = t.start_command.find("-jar ") {
+        let after = &t.start_command[idx + 5..];
+        return after.split_whitespace().next().map(|s| s.to_string());
+    }
+    None
+}
+
+/// Module A/B: finds GlimaNexus-managed systemd units on the server that aren't in the local
+/// database yet - e.g. after reinstalling the app, or after an identifier change (like
+/// v0.1.23's rename) wipes everyone's local app data - and re-imports them so they show up in
+/// the UI again. The game itself, its systemd unit, and its firewall rules already live
+/// entirely on the server; the only thing that previously existed nowhere but our local
+/// SQLite DB was which game/display name/limits an instance had - which `install_game` now
+/// also writes into a small `.glimanexus-instance.json` manifest alongside the game files.
+/// For instances installed before that manifest existed, falls back to guessing the game from
+/// a characteristic file each template's start command references.
+#[tauri::command]
+async fn discover_instances(state: State<'_, AppState>, server_id: String) -> Result<Vec<InstanceRecord>, String> {
+    let known: std::collections::HashSet<String> = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.list_instances(&server_id)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|i| i.id)
+            .collect()
+    };
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+
+    let unit_list = session
+        .exec("find /etc/systemd/system -maxdepth 1 -name 'novanexus-*.service' -printf '%f\\n' 2>/dev/null")
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let templates = games::load_templates();
+    let mut discovered = Vec::new();
+
+    for line in unit_list.lines() {
+        let unit_name = line.trim().trim_end_matches(".service").to_string();
+        let instance_id = match unit_name.strip_prefix("novanexus-") {
+            Some(id) if !id.is_empty() => id.to_string(),
+            _ => continue,
+        };
+        if known.contains(&instance_id) {
+            continue;
+        }
+        let install_path = format!("/home/gameserver/instances/{instance_id}");
+
+        let manifest_raw = session
+            .exec(&format!("sudo cat {install_path}/.glimanexus-instance.json 2>/dev/null"))
+            .await
+            .unwrap_or_default();
+        let manifest: Option<serde_json::Value> = serde_json::from_str(&manifest_raw).ok();
+
+        let (game_id, display_name, cpu_limit_percent, ram_limit_mb) = if let Some(m) = manifest {
+            (
+                m.get("game_id").and_then(|v| v.as_str()).unwrap_or("unknown").to_string(),
+                m.get("display_name").and_then(|v| v.as_str()).unwrap_or(&instance_id).to_string(),
+                m.get("cpu_limit_percent").and_then(|v| v.as_u64()).unwrap_or(100) as u32,
+                m.get("ram_limit_mb").and_then(|v| v.as_u64()).unwrap_or(2048) as u32,
+            )
+        } else {
+            let mut found: Option<&GameTemplate> = None;
+            for t in &templates {
+                if let Some(sig) = signature_path_for_template(t) {
+                    let check = session
+                        .exec(&format!(
+                            "test -f {}/{} && echo yes",
+                            games::shell_single_quote(&install_path),
+                            games::shell_single_quote(&sig)
+                        ))
+                        .await
+                        .unwrap_or_default();
+                    if check.trim() == "yes" {
+                        found = Some(t);
+                        break;
+                    }
+                }
+            }
+            (
+                found.map(|t| t.id.clone()).unwrap_or_else(|| "unknown".to_string()),
+                found.map(|t| t.name.clone()).unwrap_or_else(|| instance_id.clone()),
+                found.map(|t| t.default_cpu_limit_percent).unwrap_or(100),
+                found.map(|t| t.default_ram_limit_mb).unwrap_or(2048),
+            )
+        };
+
+        discovered.push(InstanceRecord {
+            id: instance_id,
+            server_id: server_id.clone(),
+            game_id,
+            display_name,
+            install_path,
+            systemd_unit: unit_name,
+            cpu_limit_percent,
+            ram_limit_mb,
+        });
+    }
+
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    for record in &discovered {
+        db.insert_instance(record).map_err(|e| e.to_string())?;
+    }
+
+    Ok(discovered)
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -879,6 +1014,7 @@ pub fn run() {
             list_games,
             list_instances,
             install_game,
+            discover_instances,
             get_instance_version,
             update_instance,
             get_instance_config,

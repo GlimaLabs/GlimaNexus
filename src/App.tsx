@@ -75,6 +75,27 @@ function App() {
   const [installingGame, setInstallingGame] = useState<GameTemplate | null>(null);
   const [showPatchNotes, setShowPatchNotes] = useState(false);
   const [browsingInstance, setBrowsingInstance] = useState<{ instance: InstanceRecord; target: "install" | "backups" } | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState("");
+  const [discoverResult, setDiscoverResult] = useState<number | null>(null);
+
+  async function discoverInstances() {
+    if (!selectedServerId) return;
+    setDiscovering(true);
+    setDiscoverError("");
+    setDiscoverResult(null);
+    try {
+      const found = await invoke<InstanceRecord[]>("discover_instances", { serverId: selectedServerId });
+      if (found.length > 0) {
+        setInstances((prev) => [...prev, ...found]);
+      }
+      setDiscoverResult(found.length);
+    } catch (err) {
+      setDiscoverError(String(err));
+    } finally {
+      setDiscovering(false);
+    }
+  }
   const [localStats, setLocalStats] = useState<LocalSystemStats | null>(null);
   const [localCpuHistory, setLocalCpuHistory] = useState<number[]>([]);
 
@@ -502,10 +523,21 @@ function App() {
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
               <h3 style={{ margin: 0 }}>Installierte Gameserver</h3>
-              <button className="nx-update-btn" onClick={() => setShowStoreDialog(true)}>
-                + Neues Spiel installieren
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button disabled={discovering} onClick={discoverInstances}>
+                  {discovering ? "Suche…" : "Vorhandene Server suchen"}
+                </button>
+                <button className="nx-update-btn" onClick={() => setShowStoreDialog(true)}>
+                  + Neues Spiel installieren
+                </button>
+              </div>
             </div>
+            {discoverError && <p style={{ color: "var(--nx-danger)", fontSize: 12 }}>{discoverError}</p>}
+            {discoverResult !== null && (
+              <p style={{ color: "var(--nx-success)", fontSize: 12 }}>
+                {discoverResult === 0 ? "Keine neuen Server gefunden." : `${discoverResult} Server(n) gefunden und hinzugefügt.`}
+              </p>
+            )}
             {instances.length === 0 && (
               <p style={{ color: "var(--nx-text-muted)" }}>Noch keine Gameserver installiert.</p>
             )}
