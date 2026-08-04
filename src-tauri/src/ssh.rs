@@ -3,6 +3,16 @@ use russh::client::{self, Handle};
 use russh::ChannelMsg;
 use russh_keys::key;
 use std::sync::Arc;
+use std::time::Duration;
+
+/// A hung TCP connect/handshake (e.g. remote not reachable yet, firewall dropping packets)
+/// would otherwise block forever - and since connections are held behind a per-server lock,
+/// one stuck attempt could block every future attempt too. Give up and let the caller retry.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Same idea for individual commands: if a pooled connection has gone silently dead (e.g.
+/// the remote host disappeared without a clean TCP close), a channel.wait() can hang forever.
+const EXEC_TIMEOUT: Duration = Duration::from_secs(20);
 
 struct ClientHandler;
 
@@ -22,6 +32,12 @@ pub struct SshSession {
 
 impl SshSession {
     pub async fn connect_password(host: &str, port: u16, username: &str, password: &str) -> Result<Self> {
+        tokio::time::timeout(CONNECT_TIMEOUT, Self::connect_password_inner(host, port, username, password))
+            .await
+            .map_err(|_| anyhow!("Zeitüberschreitung beim Verbindungsaufbau (Server nicht erreichbar?)"))?
+    }
+
+    async fn connect_password_inner(host: &str, port: u16, username: &str, password: &str) -> Result<Self> {
         let config = Arc::new(client::Config::default());
         let mut handle = client::connect(config, (host, port), ClientHandler).await?;
         let authenticated = handle.authenticate_password(username, password).await?;
@@ -33,6 +49,12 @@ impl SshSession {
 
     /// Runs a single command to completion, returning combined stdout.
     pub async fn exec(&mut self, command: &str) -> Result<String> {
+        tokio::time::timeout(EXEC_TIMEOUT, self.exec_inner(command))
+            .await
+            .map_err(|_| anyhow!("Zeitüberschreitung beim Ausführen des Befehls (Verbindung tot?)"))?
+    }
+
+    async fn exec_inner(&mut self, command: &str) -> Result<String> {
         let mut channel = self.handle.channel_open_session().await?;
         channel.exec(true, command).await?;
 
