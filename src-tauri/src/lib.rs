@@ -545,7 +545,7 @@ async fn discover_instances(state: State<'_, AppState>, server_id: String) -> Re
                 if let Some(sig) = signature_path_for_template(t) {
                     let check = session
                         .exec(&format!(
-                            "test -f {}/{} && echo yes",
+                            "sudo test -f {}/{} && echo yes",
                             games::shell_single_quote(&install_path),
                             games::shell_single_quote(&sig)
                         ))
@@ -1237,7 +1237,10 @@ async fn stream_instance_logs(
     let mut session = connect_fresh(&state, &server_id).await?;
 
     tauri::async_runtime::spawn(async move {
-        let command = format!("journalctl -fu {unit_name} -n 200 --no-pager");
+        // -o cat drops journalctl's own date/host/pid prefix - most game servers (Paper
+        // included) already print their own [HH:MM:SS LEVEL] timestamp in the message
+        // itself, so this avoids showing the date/host/pid twice per line.
+        let command = format!("journalctl -fu {unit_name} -n 200 --no-pager -o cat");
         let _ = session
             .exec_stream_lines(&command, |line| {
                 let _ = on_event.send(LogEvent::Line { text: line });

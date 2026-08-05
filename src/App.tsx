@@ -11,7 +11,7 @@ import DirectoryBrowserDialog from "./DirectoryBrowserDialog";
 import EditServerDialog from "./EditServerDialog";
 import FirewallPromptDialog from "./FirewallPromptDialog";
 import InstanceDetail from "./InstanceDetail";
-import novaNexusLogo from "./assets/novanexus_logo2.png";
+import glimaNexusLogo from "./assets/glimanexus_logo.png";
 import GameIcon from "./GameIcon";
 import DistroIcon from "./DistroIcon";
 import type { GameTemplate, InstanceRecord, InstanceStatus, LocalSystemStats, ServerRecord, VersionInfo } from "./types";
@@ -35,9 +35,9 @@ function formatUptime(seconds: number): string {
 }
 
 function MiniSparkline({ values }: { values: number[] }) {
-  const width = 48;
-  const height = 16;
-  if (values.length < 2) return <svg width={width} height={height} />;
+  const width = 200;
+  const height = 24;
+  if (values.length < 2) return <svg width="100%" height={height} />;
   const max = Math.max(100, ...values);
   const points = values
     .map((v, i) => {
@@ -47,7 +47,7 @@ function MiniSparkline({ values }: { values: number[] }) {
     })
     .join(" ");
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
       <polyline points={points} fill="none" stroke="var(--nx-accent)" strokeWidth="1.5" />
     </svg>
   );
@@ -362,7 +362,7 @@ function App() {
       <UpdateBanner />
       <aside className="nx-sidebar">
         <div className="nx-brand">
-          <img src={novaNexusLogo} alt="GlimaNexus" className="nx-brand-logo" />
+          <img src={glimaNexusLogo} alt="GlimaNexus" className="nx-brand-logo" />
         </div>
 
         <nav className="nx-nav">
@@ -395,12 +395,19 @@ function App() {
                 <span>🖥️</span> System Status
               </div>
               <div className="nx-system-status-row">
-                <span className="nx-system-status-label">CPU</span>
-                <span className="nx-system-status-val">{localStats.cpu_percent.toFixed(0)}%</span>
+                <div className="nx-system-status-row-head">
+                  <span className="nx-system-status-label">CPU</span>
+                  <span className="nx-system-status-val">{localStats.cpu_percent.toFixed(0)}%</span>
+                </div>
                 <MiniSparkline values={localCpuHistory} />
               </div>
               <div className="nx-system-status-row">
-                <span className="nx-system-status-label">RAM</span>
+                <div className="nx-system-status-row-head">
+                  <span className="nx-system-status-label">RAM</span>
+                  <span className="nx-system-status-val">
+                    {(localStats.ram_used_mb / 1024).toFixed(1)} GB / {(localStats.ram_total_mb / 1024).toFixed(0)} GB
+                  </span>
+                </div>
                 <div className="nx-system-status-bar">
                   <div
                     className="nx-system-status-bar-fill"
@@ -409,15 +416,19 @@ function App() {
                     }}
                   />
                 </div>
-                <span className="nx-system-status-val">
-                  {(localStats.ram_used_mb / 1024).toFixed(1)} GB / {(localStats.ram_total_mb / 1024).toFixed(0)} GB
-                </span>
               </div>
-              <div className="nx-system-status-row">
+              <div className="nx-system-status-row-head">
                 <span className="nx-system-status-label">Netzwerk</span>
-                <span className="nx-system-status-val">
-                  ↑ {localStats.net_up_kbps.toFixed(0)} KB/s &nbsp; ↓ {localStats.net_down_kbps.toFixed(0)} KB/s
-                </span>
+                <div className="nx-system-status-net-col">
+                  <span className="nx-system-status-net-line">
+                    <span className="nx-system-status-net-arrow">↑</span>
+                    <span className="nx-system-status-val">{localStats.net_up_kbps.toFixed(0)} KB/s</span>
+                  </span>
+                  <span className="nx-system-status-net-line">
+                    <span className="nx-system-status-net-arrow">↓</span>
+                    <span className="nx-system-status-val">{localStats.net_down_kbps.toFixed(0)} KB/s</span>
+                  </span>
+                </div>
               </div>
             </div>
           )}

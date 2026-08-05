@@ -5,6 +5,34 @@ import type { BackupEntry, ConfigSchema, InstanceRecord, InstanceStatus, Minecra
 
 type LogEvent = { event: "line"; text: string } | { event: "closed" };
 
+const LOG_LEVEL_COLORS: Record<string, string> = {
+  ERROR: "var(--nx-danger)",
+  ERR: "var(--nx-danger)",
+  FATAL: "var(--nx-danger)",
+  SEVERE: "var(--nx-danger)",
+  WARN: "#facc15",
+  WARNING: "#facc15",
+  INFO: "var(--nx-success)",
+};
+
+// Log formats differ wildly per game, so instead of strictly parsing columns, just
+// highlight the first recognizable level keyword wherever it appears in the line -
+// robust across Paper's "[HH:MM:SS INFO]:", plain "[WARN]", "ERROR:", etc.
+function highlightLogLine(line: string) {
+  const match = line.match(/\b(ERROR|ERR|FATAL|SEVERE|WARNING|WARN|INFO)\b/);
+  if (!match || match.index == null) return line;
+  const color = LOG_LEVEL_COLORS[match[0]];
+  const before = line.slice(0, match.index);
+  const after = line.slice(match.index + match[0].length);
+  return (
+    <>
+      {before}
+      <span style={{ color, fontWeight: 600 }}>{match[0]}</span>
+      {after}
+    </>
+  );
+}
+
 type Props = {
   serverId: string;
   instance: InstanceRecord;
@@ -79,7 +107,10 @@ export default function InstanceDetail({
   }
 
   useEffect(() => {
-    if (tab !== "console" || startedForAttempt.current === logAttempt) return;
+    // Streams for the whole lifetime of the detail view (not gated by which tab is active) -
+    // Status & Ressourcen and Live-Konsole both show the same live log buffer, no reason to
+    // tear down and reconnect when switching tabs.
+    if (startedForAttempt.current === logAttempt) return;
     startedForAttempt.current = logAttempt;
     setLogError(false);
 
@@ -98,7 +129,7 @@ export default function InstanceDetail({
       setLines((prev) => [...prev, `[Fehler] ${String(err)}`]);
       setLogError(true);
     });
-  }, [tab, logAttempt, serverId, instance.systemd_unit]);
+  }, [logAttempt, serverId, instance.systemd_unit]);
 
   function retryLogs() {
     setLines([]);
@@ -271,6 +302,37 @@ export default function InstanceDetail({
     }
   }, [lines, autoScroll]);
 
+  function renderLogPanel() {
+    return (
+      <div className="nx-log-panel">
+        <div className="nx-console" ref={consoleRef}>
+          {lines.length === 0 && <div style={{ color: "var(--nx-text-muted)" }}>Warte auf Log-Ausgabe…</div>}
+          {lines.map((line, i) => (
+            <div key={i} className="nx-log-line" title={line}>
+              {highlightLogLine(line)}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+          <label style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
+            <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} /> Automatisch
+            scrollen
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            {logError && (
+              <button className="nx-icon-btn" onClick={retryLogs}>
+                ⟳ Erneut verbinden
+              </button>
+            )}
+            <button className="nx-icon-btn" onClick={() => setLines([])} title="Löscht nur die Ansicht, nicht die Server-Logs">
+              Log leeren
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   useEffect(() => {
     if (instance.game_id !== "minecraft-paper") return;
     const poll = () => {
@@ -331,91 +393,99 @@ export default function InstanceDetail({
       </div>
 
       {tab === "status" && (
-        <>
-          <div className="nx-status-grid">
-            <div className="nx-chart-card">
-              <div className="nx-chart-card-head">
-                <div className="nx-chart-title">CPU Auslastung</div>
-                <select className="nx-range-select" disabled defaultValue="1h">
-                  <option value="1h">1 Stunde</option>
-                </select>
+        <div className="nx-status-layout">
+          <div className="nx-status-layout-main">
+            <div className="nx-status-grid">
+              <div className="nx-chart-card">
+                <div className="nx-chart-card-head">
+                  <div className="nx-chart-title">CPU Auslastung</div>
+                  <select className="nx-range-select" disabled defaultValue="1h">
+                    <option value="1h">1 Stunde</option>
+                  </select>
+                </div>
+                <div className="nx-chart-value">{(cpuHistory[cpuHistory.length - 1] ?? 0).toFixed(0)}%</div>
+                <Sparkline values={cpuHistory} max={Math.max(100, instance.cpu_limit_percent)} />
               </div>
-              <div className="nx-chart-value">{(cpuHistory[cpuHistory.length - 1] ?? 0).toFixed(0)}%</div>
-              <Sparkline values={cpuHistory} max={Math.max(100, instance.cpu_limit_percent)} />
+              <div className="nx-chart-card">
+                <div className="nx-chart-card-head">
+                  <div className="nx-chart-title">RAM Auslastung</div>
+                  <select className="nx-range-select" disabled defaultValue="1h">
+                    <option value="1h">1 Stunde</option>
+                  </select>
+                </div>
+                <div className="nx-chart-value">
+                  {((ramHistory[ramHistory.length - 1] ?? 0) / 1024).toFixed(1)} GB
+                  <span className="nx-chart-value-max"> / {(instance.ram_limit_mb / 1024).toFixed(0)} GB</span>
+                </div>
+                <Sparkline values={ramHistory} max={instance.ram_limit_mb} />
+              </div>
+              <div className="nx-fact-card">
+                <div className="nx-fact-row">
+                  <span>Prozess ID</span>
+                  <span>{status?.pid ?? "–"}</span>
+                </div>
+                <div className="nx-fact-row" title={instance.game_id !== "minecraft-paper" ? "Nur für Minecraft verfügbar" : undefined}>
+                  <span>Spieler Online</span>
+                  <span>
+                    {mcLiveStatus?.players_online != null ? `${mcLiveStatus.players_online} / ${mcLiveStatus.players_max}` : "–"}
+                  </span>
+                </div>
+                <div className="nx-fact-row" title={instance.game_id !== "minecraft-paper" ? "Nur für Minecraft verfügbar" : undefined}>
+                  <span>Welt</span>
+                  <span>{mcLiveStatus?.world ?? "–"}</span>
+                </div>
+                <div className="nx-fact-row">
+                  <span>Startzeit</span>
+                  <span>{formatStartedAt(status?.started_at)}</span>
+                </div>
+                <div className="nx-fact-row">
+                  <span>Laufzeit</span>
+                  <span>{formatUptimeShort(status?.uptime_seconds ?? 0)}</span>
+                </div>
+              </div>
             </div>
-            <div className="nx-chart-card">
-              <div className="nx-chart-card-head">
-                <div className="nx-chart-title">RAM Auslastung</div>
-                <select className="nx-range-select" disabled defaultValue="1h">
-                  <option value="1h">1 Stunde</option>
-                </select>
+
+            <div className="nx-resource-bar-card">
+              <div className="nx-resource-bar">
+                <div className="nx-resource-bar-item">
+                  <span className="nx-resource-bar-icon-box">⚙️</span>
+                  <div>
+                    <div className="nx-resource-bar-label">CPU Limit</div>
+                    <div className="nx-resource-bar-value">{instance.cpu_limit_percent}%</div>
+                  </div>
+                </div>
+                <div className="nx-resource-bar-item">
+                  <span className="nx-resource-bar-icon-box">🧠</span>
+                  <div>
+                    <div className="nx-resource-bar-label">RAM Limit</div>
+                    <div className="nx-resource-bar-value">{instance.ram_limit_mb} MB</div>
+                  </div>
+                </div>
+                {diskTotalGb !== undefined && diskTotalGb > 0 && (
+                  <div className="nx-resource-bar-item">
+                    <span className="nx-resource-bar-icon-box">💾</span>
+                    <div>
+                      <div className="nx-resource-bar-label">Speicherplatz</div>
+                      <div className="nx-resource-bar-value">
+                        {diskUsedGb} GB / {diskTotalGb} GB
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="nx-chart-value">
-                {((ramHistory[ramHistory.length - 1] ?? 0) / 1024).toFixed(1)} GB
-                <span className="nx-chart-value-max"> / {(instance.ram_limit_mb / 1024).toFixed(0)} GB</span>
-              </div>
-              <Sparkline values={ramHistory} max={instance.ram_limit_mb} />
-            </div>
-            <div className="nx-fact-card">
-              <div className="nx-fact-row">
-                <span>Prozess ID</span>
-                <span>{status?.pid ?? "–"}</span>
-              </div>
-              <div className="nx-fact-row" title={instance.game_id !== "minecraft-paper" ? "Nur für Minecraft verfügbar" : undefined}>
-                <span>Spieler Online</span>
-                <span>
-                  {mcLiveStatus?.players_online != null ? `${mcLiveStatus.players_online} / ${mcLiveStatus.players_max}` : "–"}
-                </span>
-              </div>
-              <div className="nx-fact-row" title={instance.game_id !== "minecraft-paper" ? "Nur für Minecraft verfügbar" : undefined}>
-                <span>Welt</span>
-                <span>{mcLiveStatus?.world ?? "–"}</span>
-              </div>
-              <div className="nx-fact-row">
-                <span>Startzeit</span>
-                <span>{formatStartedAt(status?.started_at)}</span>
-              </div>
-              <div className="nx-fact-row">
-                <span>Laufzeit</span>
-                <span>{formatUptimeShort(status?.uptime_seconds ?? 0)}</span>
-              </div>
+              {diskTotalGb !== undefined && diskTotalGb > 0 && (
+                <div className="nx-disk-bar">
+                  <div
+                    className="nx-disk-bar-fill"
+                    style={{ width: `${Math.min(100, ((diskUsedGb ?? 0) / diskTotalGb) * 100)}%` }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="nx-resource-bar">
-            <div className="nx-resource-bar-item">
-              <span className="nx-resource-bar-icon">⚙️</span>
-              <div>
-                <div className="nx-resource-bar-label">CPU Limit</div>
-                <div className="nx-resource-bar-value">{instance.cpu_limit_percent}%</div>
-              </div>
-            </div>
-            <div className="nx-resource-bar-item">
-              <span className="nx-resource-bar-icon">🧠</span>
-              <div>
-                <div className="nx-resource-bar-label">RAM Limit</div>
-                <div className="nx-resource-bar-value">{instance.ram_limit_mb} MB</div>
-              </div>
-            </div>
-            {diskTotalGb !== undefined && diskTotalGb > 0 && (
-              <div className="nx-resource-bar-item nx-resource-bar-disk">
-                <span className="nx-resource-bar-icon">💾</span>
-                <div style={{ flex: 1 }}>
-                  <div className="nx-resource-bar-label">Speicherplatz</div>
-                  <div className="nx-resource-bar-value">
-                    {diskUsedGb} GB / {diskTotalGb} GB
-                  </div>
-                  <div className="nx-disk-bar">
-                    <div
-                      className="nx-disk-bar-fill"
-                      style={{ width: `${Math.min(100, ((diskUsedGb ?? 0) / diskTotalGb) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </>
+          <div className="nx-status-layout-log">{renderLogPanel()}</div>
+        </div>
       )}
 
       {tab === "config" && (
@@ -465,27 +535,7 @@ export default function InstanceDetail({
         </div>
       )}
 
-      {tab === "console" && (
-        <div>
-          <div className="nx-console" ref={consoleRef}>
-            {lines.length === 0 && <div style={{ color: "var(--nx-text-muted)" }}>Warte auf Log-Ausgabe…</div>}
-            {lines.map((line, i) => (
-              <div key={i}>{line}</div>
-            ))}
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
-              <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} /> Automatisch
-              scrollen
-            </label>
-            {logError && (
-              <button onClick={retryLogs} style={{ fontSize: 12 }}>
-                ⟳ Erneut verbinden
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {tab === "console" && renderLogPanel()}
 
       {tab === "backups" && (
         <div>

@@ -1,3 +1,26 @@
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--nx-accent-soft) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--nx-accent-soft);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--nx-accent);
+}
+
 .nx-titlebar {
   grid-column: 1 / -1;
   height: 36px;
@@ -45,7 +68,7 @@
 
 .nx-shell {
   display: grid;
-  grid-template-columns: 220px 300px 1fr;
+  grid-template-columns: 190px 260px 1fr;
   grid-template-rows: 36px 1fr;
   height: 100vh;
   overflow: hidden;
@@ -73,12 +96,13 @@
 .nx-brand {
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 8px 8px 20px;
 }
 
 .nx-brand-logo {
   max-width: 100%;
-  height: 32px;
+  height: 56px;
   width: auto;
   object-fit: contain;
   filter: drop-shadow(0 0 6px var(--nx-accent-soft));
@@ -119,7 +143,10 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px;
+  padding: 10px;
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  background: var(--nx-panel-alt);
 }
 
 .nx-avatar {
@@ -160,23 +187,45 @@
 
 .nx-system-status-row {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nx-system-status-row-head {
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
 }
 
 .nx-system-status-label {
-  width: 60px;
   flex-shrink: 0;
 }
 
 .nx-system-status-val {
-  margin-left: auto;
   color: var(--nx-text);
   white-space: nowrap;
 }
 
+.nx-system-status-net-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.nx-system-status-net-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nx-system-status-net-arrow {
+  color: var(--nx-accent);
+  font-weight: 700;
+}
+
 .nx-system-status-bar {
-  flex: 1;
+  width: 100%;
   height: 6px;
   border-radius: 3px;
   background: var(--nx-border);
@@ -860,6 +909,43 @@
   border-bottom-color: var(--nx-accent);
 }
 
+.nx-status-layout {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  max-height: calc(100vh - 220px);
+}
+
+.nx-status-layout-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.nx-status-layout-log {
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.nx-status-layout-log .nx-log-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.nx-status-layout-log .nx-console {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
 .nx-status-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -960,25 +1046,37 @@
   padding: 3px 6px;
 }
 
+.nx-resource-bar-card {
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  background: var(--nx-panel);
+  padding: 16px;
+  margin-top: 14px;
+}
+
 .nx-resource-bar {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
-  margin-top: 14px;
 }
 
 .nx-resource-bar-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--nx-border);
-  border-radius: var(--nx-radius);
-  background: var(--nx-panel);
 }
 
-.nx-resource-bar-icon {
-  font-size: 18px;
+.nx-resource-bar-icon-box {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: 1px solid var(--nx-border);
+  border-radius: 8px;
+  background: var(--nx-accent-soft);
 }
 
 .nx-resource-bar-label {
@@ -992,15 +1090,12 @@
   font-weight: 600;
 }
 
-.nx-resource-bar-disk .nx-resource-bar-value {
-  margin-bottom: 4px;
-}
-
 .nx-disk-bar {
   height: 6px;
   background: var(--nx-panel-alt);
   border-radius: 999px;
   overflow: hidden;
+  margin-top: 14px;
 }
 
 .nx-disk-bar-fill {
@@ -1052,6 +1147,12 @@
   color: #b6e6df;
   margin-bottom: 8px;
   white-space: pre-wrap;
+}
+
+.nx-log-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nx-empty-state {
