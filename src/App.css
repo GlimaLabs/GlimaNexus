@@ -366,6 +366,8 @@
 }
 
 .nx-modal input {
+  width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--nx-border);
@@ -772,6 +774,20 @@
   color: var(--nx-text);
   padding: 6px 10px;
   font-size: 12px;
+}
+
+.nx-icon-btn {
+  background: var(--nx-panel-alt);
+  border: 1px solid var(--nx-border);
+  color: var(--nx-text-muted);
+  border-radius: 6px;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.nx-icon-btn:hover {
+  color: var(--nx-text);
+  border-color: var(--nx-accent);
 }
 
 .nx-context-menu {

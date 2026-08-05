@@ -201,6 +201,53 @@ async fn add_server(state: State<'_, AppState>, input: AddServerInput) -> Result
     Ok(record)
 }
 
+/// Module A: updates a server's connection details (name/host/port/username, optionally a
+/// new password) without re-provisioning anything on the server itself - for when the
+/// provider changes the IP, or the user wants to fix a typo, without starting over. Verifies
+/// the new details actually connect before persisting them, and drops the pooled SSH session
+/// (if any) so the next command reconnects fresh with the updated details.
+#[tauri::command]
+async fn update_server(
+    state: State<'_, AppState>,
+    server_id: String,
+    name: String,
+    host: String,
+    port: u16,
+    username: String,
+    password: Option<String>,
+) -> Result<ServerRecord, String> {
+    let effective_password = match &password {
+        Some(p) if !p.is_empty() => p.clone(),
+        _ => keyring_store::get_secret(&server_id).map_err(|e| e.to_string())?,
+    };
+
+    ssh::SshSession::connect_password(&host, port, &username, &effective_password)
+        .await
+        .map_err(|e| format!("Verbindung mit den neuen Zugangsdaten fehlgeschlagen: {e}"))?;
+
+    if let Some(p) = &password {
+        if !p.is_empty() {
+            keyring_store::store_secret(&server_id, p).map_err(|e| e.to_string())?;
+        }
+    }
+
+    {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.update_server(&server_id, &name, &host, port, &username)
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Force a reconnect on the next command instead of reusing a session that was opened
+    // against the old host/port/credentials.
+    {
+        let mut pool = state.ssh_pool.lock().map_err(|e| e.to_string())?;
+        pool.remove(&server_id);
+    }
+
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.get_server(&server_id).map_err(|e| e.to_string())
+}
+
 /// Reboots the underlying VPS/root server. Destructive/disruptive - the frontend
 /// must confirm with the user before calling this.
 #[tauri::command]
@@ -1179,6 +1226,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_local_system_stats,
             add_server,
+            update_server,
             list_servers,
             delete_server,
             reboot_server,

@@ -8,6 +8,7 @@ import AddServerDialog from "./AddServerDialog";
 import GameStoreDialog from "./GameStoreDialog";
 import PatchNotesDialog from "./PatchNotesDialog";
 import DirectoryBrowserDialog from "./DirectoryBrowserDialog";
+import EditServerDialog from "./EditServerDialog";
 import InstanceDetail from "./InstanceDetail";
 import novaNexusLogo from "./assets/novanexus_logo2.png";
 import GameIcon from "./GameIcon";
@@ -75,6 +76,8 @@ function App() {
   const [installingGame, setInstallingGame] = useState<GameTemplate | null>(null);
   const [showPatchNotes, setShowPatchNotes] = useState(false);
   const [browsingInstance, setBrowsingInstance] = useState<{ instance: InstanceRecord; target: "install" | "backups" } | null>(null);
+  const [openServerMenuId, setOpenServerMenuId] = useState<string | null>(null);
+  const [editingServer, setEditingServer] = useState<ServerRecord | null>(null);
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
   const [discoverResult, setDiscoverResult] = useState<number | null>(null);
@@ -128,6 +131,13 @@ function App() {
     window.addEventListener("click", close);
     return () => window.removeEventListener("click", close);
   }, [openMenuId]);
+
+  useEffect(() => {
+    if (!openServerMenuId) return;
+    const close = () => setOpenServerMenuId(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [openServerMenuId]);
 
   useEffect(() => {
     loadServers();
@@ -454,6 +464,27 @@ function App() {
                   </div>
                   <div className="nx-server-ip">{server.host}</div>
                 </div>
+                <div style={{ position: "relative" }}>
+                  <button
+                    className="nx-icon-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenServerMenuId(openServerMenuId === server.id ? null : server.id);
+                    }}
+                  >
+                    ⋯
+                  </button>
+                  {openServerMenuId === server.id && (
+                    <div className="nx-context-menu" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => { setOpenServerMenuId(null); setEditingServer(server); }}>
+                        Server bearbeiten
+                      </button>
+                      <button disabled title="Bald verfügbar">
+                        Vollzugriff (SFTP)
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               {s ? (
                 <div className="nx-server-meter-row">
@@ -638,6 +669,7 @@ function App() {
                       </button>
                       <div style={{ position: "relative" }}>
                         <button
+                          className="nx-icon-btn"
                           onClick={(e) => {
                             e.stopPropagation();
                             setOpenMenuId(openMenuId === instance.id ? null : instance.id);
@@ -714,6 +746,17 @@ function App() {
             setServers((prev) => [...prev, server]);
             setSelectedServerId(server.id);
             setShowAddDialog(false);
+          }}
+        />
+      )}
+
+      {editingServer && (
+        <EditServerDialog
+          server={editingServer}
+          onClose={() => setEditingServer(null)}
+          onUpdated={(updated) => {
+            setServers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            setEditingServer(null);
           }}
         />
       )}

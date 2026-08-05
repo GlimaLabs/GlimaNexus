@@ -74,6 +74,17 @@ impl Db {
         Ok(())
     }
 
+    /// Updates a server's connection details (name/host/port/username) in place - lets the
+    /// user fix things like a changed provider IP or renamed login without re-provisioning
+    /// the `gameserver` user, systemd units, or anything else already set up on the server.
+    pub fn update_server(&self, id: &str, name: &str, host: &str, port: u16, username: &str) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "UPDATE servers SET name = ?2, host = ?3, port = ?4, username = ?5 WHERE id = ?1",
+            params![id, name, host, port, username],
+        )?;
+        Ok(())
+    }
+
     pub fn list_servers(&self) -> rusqlite::Result<Vec<ServerRecord>> {
         let mut stmt = self
             .conn
