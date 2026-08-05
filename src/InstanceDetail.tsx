@@ -464,23 +464,21 @@ export default function InstanceDetail({
                 {diskTotalGb !== undefined && diskTotalGb > 0 && (
                   <div className="nx-resource-bar-item">
                     <span className="nx-resource-bar-icon-box">💾</span>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div className="nx-resource-bar-label">Speicherplatz</div>
                       <div className="nx-resource-bar-value">
                         {diskUsedGb} GB / {diskTotalGb} GB
+                      </div>
+                      <div className="nx-disk-bar">
+                        <div
+                          className="nx-disk-bar-fill"
+                          style={{ width: `${Math.min(100, ((diskUsedGb ?? 0) / diskTotalGb) * 100)}%` }}
+                        />
                       </div>
                     </div>
                   </div>
                 )}
               </div>
-              {diskTotalGb !== undefined && diskTotalGb > 0 && (
-                <div className="nx-disk-bar">
-                  <div
-                    className="nx-disk-bar-fill"
-                    style={{ width: `${Math.min(100, ((diskUsedGb ?? 0) / diskTotalGb) * 100)}%` }}
-                  />
-                </div>
-              )}
             </div>
           </div>
 
@@ -594,6 +592,8 @@ export default function InstanceDetail({
 function Sparkline({ values, max }: { values: number[]; max: number }) {
   const width = 240;
   const height = 90;
+  const axisWidth = 34;
+  const axisHeight = 16;
   const gradientId = "nx-spark-fill";
   if (values.length === 0) {
     return <div style={{ color: "var(--nx-text-muted)", fontSize: 12 }}>Noch keine Daten</div>;
@@ -605,17 +605,56 @@ function Sparkline({ values, max }: { values: number[]; max: number }) {
   });
   const linePoints = coords.map(([x, y]) => `${x},${y}`).join(" ");
   const areaPoints = `0,${height} ${linePoints} ${width},${height}`;
+  const yTicks = [0, 0.25, 0.5, 0.75, 1];
+  // Exactly 4 labels, each range/4 apart, ending at "now" - e.g. at the "1 Stunde" range
+  // that's one every 15 minutes (18:00/17:45/17:30/17:15), at "2 Stunden" every 30 minutes.
+  const now = Date.now();
+  const rangeMinutes = 60;
+  const stepSeconds = (rangeMinutes * 60) / 4;
+  const xTicks = Array.from({ length: 4 }, (_, i) => new Date(now - (3 - i) * stepSeconds * 1000));
 
   return (
-    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--nx-accent)" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="var(--nx-accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={areaPoints} fill={`url(#${gradientId})`} />
-      <polyline points={linePoints} fill="none" stroke="var(--nx-accent)" strokeWidth="2" />
-    </svg>
+    <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          width: axisWidth,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          paddingBottom: axisHeight,
+          fontSize: 10,
+          color: "var(--nx-text-muted)",
+          textAlign: "right",
+          paddingRight: 4,
+        }}
+      >
+        {yTicks.map((t) => (
+          <span key={t}>{Math.round((1 - t) * 100)}%</span>
+        ))}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <svg
+          width="100%"
+          height="100%"
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="none"
+          style={{ flex: 1, minHeight: 0 }}
+        >
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--nx-accent)" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="var(--nx-accent)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <polygon points={areaPoints} fill={`url(#${gradientId})`} />
+          <polyline points={linePoints} fill="none" stroke="var(--nx-accent)" strokeWidth="2" />
+        </svg>
+        <div style={{ display: "flex", justifyContent: "space-between", height: axisHeight, flexShrink: 0, fontSize: 10, color: "var(--nx-text-muted)" }}>
+          {xTicks.map((d, i) => (
+            <span key={i}>{d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
