@@ -44,12 +44,18 @@ Lizenziert unter [GPL-3.0](LICENSE) — bleibt Open Source, Forks müssen offen 
 
 ## Entwicklung
 
-Voraussetzung unter Windows: [OpenSSL (Dev, inkl. Header/Libs)](https://slproweb.com/products/Win32OpenSSL.html) installiert und `OPENSSL_DIR` auf den Installationspfad gesetzt (z.B. `C:\Program Files\OpenSSL-Win64`) — wird für das Linken von SQLCipher benötigt.
+Voraussetzung unter Windows: [OpenSSL (Dev, inkl. Header/Libs)](https://slproweb.com/products/Win32OpenSSL.html) installiert, wird für das Linken von SQLCipher benötigt. Der Installer legt die `.lib`-Dateien in einem `VC`-Unterordner ab, nicht direkt unter `lib/` — `OPENSSL_DIR` allein reicht dem Linker deshalb nicht, `OPENSSL_LIB_DIR` muss explizit auf den passenden Unterordner zeigen:
 
 ```bash
+export OPENSSL_DIR="C:/Program Files/OpenSSL-Win64"
+export OPENSSL_LIB_DIR="C:/Program Files/OpenSSL-Win64/lib/VC/x64/MD"
+export OPENSSL_INCLUDE_DIR="C:/Program Files/OpenSSL-Win64/include"
+
 npm install
 npm run tauri dev
 ```
+
+`npm run tauri build` baut lokal exakt den Installer, den auch die Release-Pipeline erzeugt — gut zum Testen vor einem echten Release.
 
 ## Releases & Auto-Update
 
