@@ -524,7 +524,7 @@ function App() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
               <h3 style={{ margin: 0 }}>Installierte Gameserver</h3>
               <div style={{ display: "flex", gap: 8 }}>
-                <button disabled={discovering} onClick={discoverInstances}>
+                <button className="nx-btn-restart" disabled={discovering} onClick={discoverInstances}>
                   {discovering ? "Suche…" : "Vorhandene Server suchen"}
                 </button>
                 <button className="nx-update-btn" onClick={() => setShowStoreDialog(true)}>
