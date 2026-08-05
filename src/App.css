@@ -910,26 +910,27 @@
 }
 
 .nx-status-layout {
-  display: grid;
-  grid-template-columns: 1fr 360px;
-  grid-template-rows: minmax(0, 1fr);
+  display: flex;
+  align-items: flex-start;
   gap: 16px;
   max-height: calc(100vh - 220px);
 }
 
 .nx-status-layout-main {
+  flex: 1;
   min-width: 0;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  overflow-y: auto;
 }
 
 .nx-status-layout-log {
+  width: 360px;
+  flex-shrink: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .nx-status-layout-log .nx-log-panel {
@@ -943,6 +944,12 @@
   flex: 1;
   height: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nx-status-layout-log .nx-log-footer {
+  flex-shrink: 0;
 }
 
 .nx-status-grid {
@@ -1146,17 +1153,18 @@
   padding: 12px;
   height: 320px;
   overflow-y: auto;
+  overflow-x: auto;
   font-family: "Cascadia Code", Consolas, monospace;
   font-size: 12px;
+  line-height: 1.5;
   color: #b6e6df;
   margin-bottom: 8px;
-  white-space: pre-wrap;
+  white-space: pre;
+  word-wrap: normal;
 }
 
 .nx-log-line {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre;
 }
 
 .nx-empty-state {

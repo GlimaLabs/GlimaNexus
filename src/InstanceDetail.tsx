@@ -81,6 +81,8 @@ export default function InstanceDetail({
   const [logAttempt, setLogAttempt] = useState(0);
   const [logError, setLogError] = useState(false);
   const consoleRef = useRef<HTMLDivElement>(null);
+  const mainColRef = useRef<HTMLDivElement>(null);
+  const [mainColHeight, setMainColHeight] = useState<number | null>(null);
   const startedForAttempt = useRef(-1);
 
   const isActive = status?.state === "active";
@@ -277,6 +279,16 @@ export default function InstanceDetail({
       .finally(() => setConfigLoading(false));
   }, [tab, configSchema, serverId, instance.game_id, instance.install_path]);
 
+  useEffect(() => {
+    if (tab !== "status" || !mainColRef.current) return;
+    const el = mainColRef.current;
+    const observer = new ResizeObserver((entries) => {
+      setMainColHeight(entries[0].contentRect.height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [tab]);
+
   async function saveConfig() {
     setConfigSaving(true);
     setConfigError("");
@@ -306,14 +318,19 @@ export default function InstanceDetail({
     return (
       <div className="nx-log-panel">
         <div className="nx-console" ref={consoleRef}>
-          {lines.length === 0 && <div style={{ color: "var(--nx-text-muted)" }}>Warte auf Log-Ausgabe…</div>}
+          {lines.length === 0 && (
+            <div style={{ color: "var(--nx-text-muted)", margin: "auto" }}>Warte auf Log-Ausgabe…</div>
+          )}
           {lines.map((line, i) => (
             <div key={i} className="nx-log-line" title={line}>
               {highlightLogLine(line)}
             </div>
           ))}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+        <div
+          className="nx-log-footer"
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}
+        >
           <label style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
             <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} /> Automatisch
             scrollen
@@ -394,7 +411,7 @@ export default function InstanceDetail({
 
       {tab === "status" && (
         <div className="nx-status-layout">
-          <div className="nx-status-layout-main">
+          <div className="nx-status-layout-main" ref={mainColRef}>
             <div className="nx-status-grid">
               <div className="nx-chart-card">
                 <div className="nx-chart-card-head">
@@ -482,7 +499,9 @@ export default function InstanceDetail({
             </div>
           </div>
 
-          <div className="nx-status-layout-log">{renderLogPanel()}</div>
+          <div className="nx-status-layout-log" style={mainColHeight ? { height: mainColHeight, maxHeight: mainColHeight } : undefined}>
+            {renderLogPanel()}
+          </div>
         </div>
       )}
 
