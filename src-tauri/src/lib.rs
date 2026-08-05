@@ -103,7 +103,12 @@ pub enum LogEvent {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "event", rename_all = "camelCase")]
 pub enum UploadEvent {
-    Progress { bytes_sent: u64, total_bytes: u64 },
+    Progress {
+        #[serde(rename = "bytesSent")]
+        bytes_sent: u64,
+        #[serde(rename = "totalBytes")]
+        total_bytes: u64,
+    },
 }
 
 #[derive(Deserialize)]

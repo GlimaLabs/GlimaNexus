@@ -100,7 +100,7 @@ impl SshSession {
     where
         F: FnMut(u64, u64),
     {
-        const CHUNK_SIZE: usize = 256 * 1024;
+        const CHUNK_SIZE: usize = 1024 * 1024;
         let mut channel = self.handle.channel_open_session().await?;
         channel.exec(true, command).await?;
 
