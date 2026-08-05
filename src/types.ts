@@ -41,6 +41,12 @@ export type VersionInfo = {
   up_to_date: boolean;
 };
 
+export type MinecraftLiveStatus = {
+  world: string | null;
+  players_online: number | null;
+  players_max: number | null;
+};
+
 export type BackupEntry = {
   name: string;
   size_bytes: number;

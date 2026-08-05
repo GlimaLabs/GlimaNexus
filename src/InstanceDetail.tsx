@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
-import type { BackupEntry, ConfigSchema, InstanceRecord, InstanceStatus } from "./types";
+import type { BackupEntry, ConfigSchema, InstanceRecord, InstanceStatus, MinecraftLiveStatus } from "./types";
 
 type LogEvent = { event: "line"; text: string } | { event: "closed" };
 
@@ -40,6 +40,7 @@ export default function InstanceDetail({
   const [backupBusyName, setBackupBusyName] = useState<string | null>(null);
   const [backupError, setBackupError] = useState("");
   const [backupSavedPath, setBackupSavedPath] = useState("");
+  const [mcLiveStatus, setMcLiveStatus] = useState<MinecraftLiveStatus | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [configLoading, setConfigLoading] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
@@ -239,6 +240,21 @@ export default function InstanceDetail({
     }
   }, [lines, autoScroll]);
 
+  useEffect(() => {
+    if (instance.game_id !== "minecraft-paper") return;
+    const poll = () => {
+      invoke<MinecraftLiveStatus>("get_minecraft_live_status", {
+        serverId,
+        installPath: instance.install_path,
+      })
+        .then(setMcLiveStatus)
+        .catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 10000);
+    return () => clearInterval(interval);
+  }, [serverId, instance.game_id, instance.install_path]);
+
   return (
     <div className="nx-instance-detail">
       <div className="nx-instance-detail-header">
@@ -314,13 +330,15 @@ export default function InstanceDetail({
                 <span>Prozess ID</span>
                 <span>{status?.pid ?? "–"}</span>
               </div>
-              <div className="nx-fact-row" title="Nur für Minecraft verfügbar (später)">
+              <div className="nx-fact-row" title={instance.game_id !== "minecraft-paper" ? "Nur für Minecraft verfügbar" : undefined}>
                 <span>Spieler Online</span>
-                <span>–</span>
+                <span>
+                  {mcLiveStatus?.players_online != null ? `${mcLiveStatus.players_online} / ${mcLiveStatus.players_max}` : "–"}
+                </span>
               </div>
-              <div className="nx-fact-row" title="Nur für Minecraft verfügbar (später)">
+              <div className="nx-fact-row" title={instance.game_id !== "minecraft-paper" ? "Nur für Minecraft verfügbar" : undefined}>
                 <span>Welt</span>
-                <span>–</span>
+                <span>{mcLiveStatus?.world ?? "–"}</span>
               </div>
               <div className="nx-fact-row">
                 <span>Startzeit</span>

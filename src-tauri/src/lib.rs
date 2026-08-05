@@ -1,6 +1,7 @@
 mod db;
 mod games;
 mod keyring_store;
+mod mc_ping;
 mod provisioning;
 mod ssh;
 
@@ -536,6 +537,57 @@ async fn get_instance_version(
     Ok(VersionInfo { installed, latest, up_to_date })
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct MinecraftLiveStatus {
+    pub world: Option<String>,
+    pub players_online: Option<u32>,
+    pub players_max: Option<u32>,
+}
+
+/// Module C: reads the world name from server.properties and live player counts via the
+/// vanilla Server List Ping protocol - the exact same query the in-game multiplayer server
+/// list performs - so "Spieler Online"/"Welt" in the UI show real data instead of a
+/// permanent placeholder. Player counts are best-effort: if the server can't be reached
+/// directly (firewalled off from the machine running the app, still starting up, etc.) those
+/// fields just come back None rather than failing the whole call.
+#[tauri::command]
+async fn get_minecraft_live_status(
+    state: State<'_, AppState>,
+    server_id: String,
+    install_path: String,
+) -> Result<MinecraftLiveStatus, String> {
+    let host = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.get_server(&server_id).map_err(|e| e.to_string())?.host
+    };
+
+    let raw = {
+        let mut guard = acquire_session(&state, &server_id).await?;
+        let session = guard.as_mut().unwrap();
+        let props_path = format!("{install_path}/server.properties");
+        session
+            .exec(&format!("sudo cat {} 2>/dev/null", games::shell_single_quote(&props_path)))
+            .await
+            .map_err(|e| e.to_string())?
+    };
+
+    let mut world = None;
+    let mut port: u16 = 25565;
+    for line in raw.lines() {
+        if let Some((k, v)) = line.trim().split_once('=') {
+            match k.trim() {
+                "level-name" => world = Some(v.trim().to_string()),
+                "server-port" => port = v.trim().parse().unwrap_or(25565),
+                _ => {}
+            }
+        }
+    }
+
+    let (players_online, players_max) = mc_ping::ping(&host, port).await.unwrap_or((None, None));
+
+    Ok(MinecraftLiveStatus { world, players_online, players_max })
+}
+
 /// Module B: re-runs a game instance's install steps (re-downloading the latest build) and
 /// restarts it - used by the "Update" action when get_instance_version reports a mismatch.
 #[tauri::command]
@@ -1055,6 +1107,7 @@ pub fn run() {
             install_game,
             discover_instances,
             get_instance_version,
+            get_minecraft_live_status,
             update_instance,
             get_instance_config,
             save_instance_config,
