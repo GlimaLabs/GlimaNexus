@@ -889,6 +889,77 @@ fn validate_backup_filename(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The local folder downloaded backups for an instance get saved into (and where the upload
+/// file picker should default to, so downloaded-then-reuploaded backups round-trip through
+/// the same place without the user having to hunt for it).
+fn local_backup_dir(app: &tauri::AppHandle, instance_id: &str) -> Result<std::path::PathBuf, String> {
+    let mut dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    dir.push("backups");
+    dir.push(instance_id);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// Module D: returns (creating if needed) the local folder for an instance's downloaded
+/// backups, so the frontend can point the upload file picker there by default.
+#[tauri::command]
+fn get_local_backup_dir(app: tauri::AppHandle, instance_id: String) -> Result<String, String> {
+    Ok(local_backup_dir(&app, &instance_id)?.to_string_lossy().to_string())
+}
+
+/// Module D: uploads a local `.tar.gz` file (e.g. a backup the user saved from before a
+/// reinstall/update) into an instance's backup directory on the server, so it shows up
+/// alongside server-created backups and can be restored the same way.
+#[tauri::command]
+async fn upload_backup(
+    state: State<'_, AppState>,
+    server_id: String,
+    instance_id: String,
+    local_path: String,
+) -> Result<BackupEntry, String> {
+    let filename = std::path::Path::new(&local_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "Ungültiger Dateiname".to_string())?
+        .to_string();
+    validate_backup_filename(&filename)?;
+
+    let data = std::fs::read(&local_path).map_err(|e| e.to_string())?;
+
+    let backup_dir = format!("/home/gameserver/backups/{instance_id}");
+    let remote_path = format!("{backup_dir}/{filename}");
+
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    session
+        .exec(&format!(
+            "sudo mkdir -p {} && sudo chown gameserver:gameserver {}",
+            games::shell_single_quote(&backup_dir),
+            games::shell_single_quote(&backup_dir)
+        ))
+        .await
+        .map_err(|e| e.to_string())?;
+    session
+        .exec_with_stdin(
+            &format!("sudo -u gameserver tee {} > /dev/null", games::shell_single_quote(&remote_path)),
+            &data,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let stat = session
+        .exec(&format!("sudo stat -c '%s|%Y' {}", games::shell_single_quote(&remote_path)))
+        .await
+        .map_err(|e| e.to_string())?;
+    let (size_bytes, created_at) = stat
+        .trim()
+        .split_once('|')
+        .and_then(|(s, t)| Some((s.parse().ok()?, t.parse().ok()?)))
+        .ok_or_else(|| "Hochgeladen, aber Größe/Zeitstempel konnten nicht gelesen werden".to_string())?;
+
+    Ok(BackupEntry { name: filename, size_bytes, created_at })
+}
+
 /// Module D: creates a `.tar.gz` snapshot of an instance's entire install directory under
 /// `/home/gameserver/backups/<instance_id>/`, timestamped so multiple backups can coexist.
 /// Backs up everything rather than trying to guess each game's "world folder" convention -
@@ -982,13 +1053,7 @@ async fn download_backup(
         .await
         .map_err(|e| e.to_string())?;
 
-    let mut local_dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| e.to_string())?;
-    local_dir.push("backups");
-    local_dir.push(&instance_id);
-    std::fs::create_dir_all(&local_dir).map_err(|e| e.to_string())?;
+    let local_dir = local_backup_dir(&app, &instance_id)?;
     let local_path = local_dir.join(&filename);
     std::fs::write(&local_path, bytes).map_err(|e| e.to_string())?;
 
@@ -1082,6 +1147,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&app_data_dir)?;
@@ -1117,6 +1183,8 @@ pub fn run() {
             forget_instance,
             list_directory,
             create_backup,
+            get_local_backup_dir,
+            upload_backup,
             list_backups,
             download_backup,
             delete_backup,

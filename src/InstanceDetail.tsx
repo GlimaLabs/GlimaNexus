@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { BackupEntry, ConfigSchema, InstanceRecord, InstanceStatus, MinecraftLiveStatus } from "./types";
 
 type LogEvent = { event: "line"; text: string } | { event: "closed" };
@@ -125,6 +126,27 @@ export default function InstanceDetail({
         instanceId: instance.id,
         installPath: instance.install_path,
       });
+      loadBackups();
+    } catch (err) {
+      setBackupError(String(err));
+    } finally {
+      setBackupCreating(false);
+    }
+  }
+
+  async function uploadBackup() {
+    const defaultPath = await invoke<string>("get_local_backup_dir", { instanceId: instance.id }).catch(() => undefined);
+    const path = await open({
+      multiple: false,
+      defaultPath,
+      filters: [{ name: "Backup", extensions: ["gz"] }],
+    });
+    if (!path || Array.isArray(path)) return;
+
+    setBackupCreating(true);
+    setBackupError("");
+    try {
+      await invoke("upload_backup", { serverId, instanceId: instance.id, localPath: path });
       loadBackups();
     } catch (err) {
       setBackupError(String(err));
@@ -460,10 +482,13 @@ export default function InstanceDetail({
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <button className="nx-btn-restart" disabled={backupCreating} onClick={createBackup}>
-              {backupCreating ? "Erstellt…" : "Backup erstellen"}
+              {backupCreating ? "…" : "Backup erstellen"}
+            </button>
+            <button className="nx-btn-start" disabled={backupCreating} onClick={uploadBackup}>
+              {backupCreating ? "…" : "Backup hochladen"}
             </button>
             <span style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
-              Sichert das komplette Server-Verzeichnis als .tar.gz auf dem Server.
+              Sichert das komplette Server-Verzeichnis als .tar.gz auf dem Server, oder lade eine lokal gespeicherte .tar.gz-Datei wieder hoch.
             </span>
           </div>
 
