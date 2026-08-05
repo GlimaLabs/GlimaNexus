@@ -8,6 +8,17 @@ export type PatchNote = {
 // newest first. Not every internal commit needs its own entry.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "0.1.25",
+    date: "2026-08-05",
+    items: [
+      "Neues Logo & App-Icon (GlimaLabs-Rebrand)",
+      "Status-Seite: Live-Log direkt neben CPU/RAM-Übersicht, CPU/RAM-Diagramme mit Achsenbeschriftung",
+      "Server bearbeiten: Name/IP/Port/Zugangsdaten nachträglich ändern, ohne den Server neu einzurichten",
+      "Neu: Firewall-Aktivieren-Vorschlag bei ungeschützten Servern (mit automatischem Sicherheitsnetz)",
+      "Diverse Layout-Fixes (Log-Fenster, Ressourcen-Anzeige, Sidebar-Breite)",
+    ],
+  },
+  {
     version: "0.1.24",
     date: "2026-08-05",
     items: [
