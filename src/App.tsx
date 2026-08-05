@@ -9,6 +9,7 @@ import GameStoreDialog from "./GameStoreDialog";
 import PatchNotesDialog from "./PatchNotesDialog";
 import DirectoryBrowserDialog from "./DirectoryBrowserDialog";
 import EditServerDialog from "./EditServerDialog";
+import FirewallPromptDialog from "./FirewallPromptDialog";
 import InstanceDetail from "./InstanceDetail";
 import novaNexusLogo from "./assets/novanexus_logo2.png";
 import GameIcon from "./GameIcon";
@@ -78,6 +79,7 @@ function App() {
   const [browsingInstance, setBrowsingInstance] = useState<{ instance: InstanceRecord; target: "install" | "backups" } | null>(null);
   const [openServerMenuId, setOpenServerMenuId] = useState<string | null>(null);
   const [editingServer, setEditingServer] = useState<ServerRecord | null>(null);
+  const [firewallPromptServer, setFirewallPromptServer] = useState<ServerRecord | null>(null);
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
   const [discoverResult, setDiscoverResult] = useState<number | null>(null);
@@ -746,7 +748,20 @@ function App() {
             setServers((prev) => [...prev, server]);
             setSelectedServerId(server.id);
             setShowAddDialog(false);
+            invoke<boolean>("check_firewall_active", { serverId: server.id })
+              .then((active) => {
+                if (!active) setFirewallPromptServer(server);
+              })
+              .catch(() => {});
           }}
+        />
+      )}
+
+      {firewallPromptServer && (
+        <FirewallPromptDialog
+          serverName={firewallPromptServer.name}
+          serverId={firewallPromptServer.id}
+          onClose={() => setFirewallPromptServer(null)}
         />
       )}
 

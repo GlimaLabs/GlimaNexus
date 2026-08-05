@@ -201,6 +201,52 @@ async fn add_server(state: State<'_, AppState>, input: AddServerInput) -> Result
     Ok(record)
 }
 
+/// Module A: checks whether a supported firewall is currently active on the server - called
+/// right after a server is added so the UI can prompt "your server is unprotected, want to
+/// turn a firewall on?" for the common case of a brand-new VPS with no local firewall at all.
+#[tauri::command]
+async fn check_firewall_active(state: State<'_, AppState>, server_id: String) -> Result<bool, String> {
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    let family = provisioning::detect_distro_family(session).await.map_err(|e| e.to_string())?;
+    provisioning::is_firewall_active(session, family).await.map_err(|e| e.to_string())
+}
+
+/// Module A: turns the firewall on for a server that doesn't have one active yet, with a
+/// 2-minute auto-rollback safety net - see `provisioning::enable_firewall_with_rollback`. Only
+/// ever called after explicit user confirmation in the UI (this is the single most consequential
+/// automated action in the app: a mistake can lock the user out of their own server).
+#[tauri::command]
+async fn enable_firewall(state: State<'_, AppState>, server_id: String) -> Result<(), String> {
+    let (host, port, username) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let server = db.get_server(&server_id).map_err(|e| e.to_string())?;
+        (server.host, server.port, server.username)
+    };
+    let password = keyring_store::get_secret(&server_id).map_err(|e| e.to_string())?;
+
+    let job_id = {
+        let mut guard = acquire_session(&state, &server_id).await?;
+        let session = guard.as_mut().unwrap();
+        let family = provisioning::detect_distro_family(session).await.map_err(|e| e.to_string())?;
+        provisioning::enable_firewall_with_rollback(session, family, port)
+            .await
+            .map_err(|e| e.to_string())?
+    };
+
+    // Verify with a brand-new connection (never the pooled one, which might just be reusing
+    // an already-open TCP socket that predates the firewall change) that we're not locked out.
+    match ssh::SshSession::connect_password(&host, port, &username, &password).await {
+        Ok(mut fresh) => {
+            let _ = provisioning::cancel_firewall_rollback(&mut fresh, &job_id).await;
+            Ok(())
+        }
+        Err(e) => Err(format!(
+            "Verbindungstest nach dem Aktivieren der Firewall fehlgeschlagen ({e}). Zu deiner Sicherheit wird die Firewall automatisch in ca. 2 Minuten wieder deaktiviert."
+        )),
+    }
+}
+
 /// Module A: updates a server's connection details (name/host/port/username, optionally a
 /// new password) without re-provisioning anything on the server itself - for when the
 /// provider changes the IP, or the user wants to fix a typo, without starting over. Verifies
@@ -1226,6 +1272,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_local_system_stats,
             add_server,
+            check_firewall_active,
+            enable_firewall,
             update_server,
             list_servers,
             delete_server,

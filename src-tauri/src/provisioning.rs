@@ -1,5 +1,5 @@
 use crate::ssh::SshSession;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 /// Grants the SSH login user passwordless sudo, scoped to that one user via a dedicated
 /// sudoers.d file. Required because our SSH commands run non-interactively (no TTY), so
@@ -196,6 +196,103 @@ pub async fn install_systemd_unit(ssh: &mut SshSession, unit_name: &str, unit_co
     .await?;
     ssh.exec("sudo systemctl daemon-reload").await?;
     ssh.exec(&format!("sudo systemctl enable {unit_name}")).await?;
+    Ok(())
+}
+
+/// Checks whether a supported firewall is currently active - used right after adding a
+/// server to decide whether to prompt "your server is unprotected, activate a firewall?".
+pub async fn is_firewall_active(ssh: &mut SshSession, family: DistroFamily) -> Result<bool> {
+    match family {
+        DistroFamily::Debian => {
+            let status = ssh.exec("sudo ufw status 2>/dev/null").await.unwrap_or_default();
+            Ok(status.contains("Status: active"))
+        }
+        DistroFamily::Fedora => {
+            let status = ssh
+                .exec("systemctl is-active firewalld 2>/dev/null")
+                .await
+                .unwrap_or_default();
+            Ok(status.trim() == "active")
+        }
+    }
+}
+
+/// Turns on the firewall for a server that doesn't have one active, with a safety net: before
+/// touching anything, schedules an `at` job that reverts the firewall in 2 minutes, so a
+/// mistake here (or an unrelated network hiccup) self-heals into "not locked out" instead of
+/// "locked out forever". The SSH port is always allowed *before* the firewall is switched to
+/// default-deny. Returns the scheduled `at` job id so the caller can cancel it once a fresh
+/// connection confirms the server is still reachable.
+pub async fn enable_firewall_with_rollback(ssh: &mut SshSession, family: DistroFamily, ssh_port: u16) -> Result<String> {
+    let rollback_cmd = match family {
+        DistroFamily::Debian => "sudo ufw --force disable",
+        DistroFamily::Fedora => "sudo systemctl stop firewalld",
+    };
+
+    match family {
+        DistroFamily::Debian => {
+            ssh.exec("command -v ufw &>/dev/null || sudo apt-get install -y ufw").await?;
+        }
+        DistroFamily::Fedora => {}
+    }
+    ssh.exec("command -v at &>/dev/null || (sudo apt-get install -y at || sudo dnf install -y at)")
+        .await?;
+    ssh.exec("sudo systemctl enable --now atd").await?;
+
+    let schedule_output = ssh
+        .exec(&format!("echo '{rollback_cmd}' | sudo at now + 2 minutes 2>&1"))
+        .await?;
+    let job_id = schedule_output
+        .split_whitespace()
+        .skip_while(|w| *w != "job")
+        .nth(1)
+        .ok_or_else(|| anyhow!("Konnte geplanten Rollback-Job nicht auslesen: {schedule_output}"))?
+        .to_string();
+
+    match family {
+        DistroFamily::Debian => {
+            ssh.exec(&format!("sudo ufw allow {ssh_port}/tcp")).await?;
+            // Don't trust the allow command silently succeeding - actually check the rule
+            // landed before ever switching the firewall to default-deny. If `ufw allow`
+            // swallowed an error, enabling now would lock the SSH port out completely.
+            let status = ssh.exec("sudo ufw status 2>/dev/null").await.unwrap_or_default();
+            if !status.lines().any(|l| l.contains(&format!("{ssh_port}/tcp")) && l.contains("ALLOW")) {
+                let _ = cancel_firewall_rollback(ssh, &job_id).await;
+                return Err(anyhow!(
+                    "SSH-Port {ssh_port}/tcp wurde nicht in den ufw-Regeln gefunden - \
+                     Firewall wurde zur Sicherheit NICHT aktiviert."
+                ));
+            }
+            ssh.exec("sudo ufw --force enable").await?;
+        }
+        DistroFamily::Fedora => {
+            ssh.exec(&format!("sudo firewall-cmd --permanent --add-port={ssh_port}/tcp"))
+                .await?;
+            // Same verification for firewalld: confirm the permanent rule actually exists
+            // before the service (default-deny once running) gets started.
+            let ports = ssh
+                .exec("sudo firewall-cmd --permanent --list-ports 2>/dev/null")
+                .await
+                .unwrap_or_default();
+            if !ports.split_whitespace().any(|p| p == format!("{ssh_port}/tcp")) {
+                let _ = cancel_firewall_rollback(ssh, &job_id).await;
+                return Err(anyhow!(
+                    "SSH-Port {ssh_port}/tcp wurde nicht in den firewalld-Regeln gefunden - \
+                     Firewall wurde zur Sicherheit NICHT aktiviert."
+                ));
+            }
+            ssh.exec("sudo systemctl enable --now firewalld").await?;
+            ssh.exec("sudo firewall-cmd --reload").await?;
+        }
+    }
+
+    Ok(job_id)
+}
+
+/// Cancels a scheduled firewall-rollback job - call once a fresh connection has confirmed the
+/// server is still reachable after `enable_firewall_with_rollback`.
+pub async fn cancel_firewall_rollback(ssh: &mut SshSession, job_id: &str) -> Result<()> {
+    ssh.exec(&format!("sudo atrm {job_id} 2>/dev/null")).await?;
     Ok(())
 }
 
