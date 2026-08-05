@@ -100,6 +100,12 @@ pub enum LogEvent {
     Closed,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(tag = "event", rename_all = "camelCase")]
+pub enum UploadEvent {
+    Progress { bytes_sent: u64, total_bytes: u64 },
+}
+
 #[derive(Deserialize)]
 pub struct AddServerInput {
     pub name: String,
@@ -916,6 +922,7 @@ async fn upload_backup(
     server_id: String,
     instance_id: String,
     local_path: String,
+    on_progress: Channel<UploadEvent>,
 ) -> Result<BackupEntry, String> {
     let filename = std::path::Path::new(&local_path)
         .file_name()
@@ -940,9 +947,12 @@ async fn upload_backup(
         .await
         .map_err(|e| e.to_string())?;
     session
-        .exec_with_stdin(
+        .exec_with_stdin_progress(
             &format!("sudo -u gameserver tee {} > /dev/null", games::shell_single_quote(&remote_path)),
             &data,
+            |bytes_sent, total_bytes| {
+                let _ = on_progress.send(UploadEvent::Progress { bytes_sent, total_bytes });
+            },
         )
         .await
         .map_err(|e| e.to_string())?;

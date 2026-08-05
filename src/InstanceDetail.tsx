@@ -41,6 +41,7 @@ export default function InstanceDetail({
   const [backupBusyName, setBackupBusyName] = useState<string | null>(null);
   const [backupError, setBackupError] = useState("");
   const [backupSavedPath, setBackupSavedPath] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [mcLiveStatus, setMcLiveStatus] = useState<MinecraftLiveStatus | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [configLoading, setConfigLoading] = useState(false);
@@ -145,13 +146,21 @@ export default function InstanceDetail({
 
     setBackupCreating(true);
     setBackupError("");
+    setUploadProgress(0);
     try {
-      await invoke("upload_backup", { serverId, instanceId: instance.id, localPath: path });
+      const channel = new Channel<{ event: "progress"; bytesSent: number; totalBytes: number }>();
+      channel.onmessage = (event) => {
+        if (event.event === "progress" && event.totalBytes > 0) {
+          setUploadProgress(Math.round((event.bytesSent / event.totalBytes) * 100));
+        }
+      };
+      await invoke("upload_backup", { serverId, instanceId: instance.id, localPath: path, onProgress: channel });
       loadBackups();
     } catch (err) {
       setBackupError(String(err));
     } finally {
       setBackupCreating(false);
+      setUploadProgress(null);
     }
   }
 
@@ -485,7 +494,7 @@ export default function InstanceDetail({
               {backupCreating ? "…" : "Backup erstellen"}
             </button>
             <button className="nx-btn-start" disabled={backupCreating} onClick={uploadBackup}>
-              {backupCreating ? "…" : "Backup hochladen"}
+              {uploadProgress != null ? `${uploadProgress}%` : backupCreating ? "…" : "Backup hochladen"}
             </button>
             <span style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
               Sichert das komplette Server-Verzeichnis als .tar.gz auf dem Server, oder lade eine lokal gespeicherte .tar.gz-Datei wieder hoch.

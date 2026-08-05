@@ -93,6 +93,39 @@ impl SshSession {
         Ok(output)
     }
 
+    /// Same as `exec_with_stdin`, but writes the data in chunks and calls `on_progress` with
+    /// (bytes_sent, total_bytes) after each one - used for uploads where the caller wants to
+    /// show a real percentage instead of an indefinite spinner while a large file transfers.
+    pub async fn exec_with_stdin_progress<F>(&mut self, command: &str, data: &[u8], mut on_progress: F) -> Result<String>
+    where
+        F: FnMut(u64, u64),
+    {
+        const CHUNK_SIZE: usize = 256 * 1024;
+        let mut channel = self.handle.channel_open_session().await?;
+        channel.exec(true, command).await?;
+
+        let total = data.len() as u64;
+        let mut sent = 0usize;
+        while sent < data.len() {
+            let end = (sent + CHUNK_SIZE).min(data.len());
+            channel.data(&data[sent..end]).await?;
+            sent = end;
+            on_progress(sent as u64, total);
+        }
+        channel.eof().await?;
+
+        let mut output = Vec::new();
+        while let Some(msg) = channel.wait().await {
+            match msg {
+                ChannelMsg::Data { data } => output.extend_from_slice(&data),
+                ChannelMsg::ExtendedData { data, .. } => output.extend_from_slice(&data),
+                ChannelMsg::Eof | ChannelMsg::Close => break,
+                _ => {}
+            }
+        }
+        Ok(String::from_utf8_lossy(&output).to_string())
+    }
+
     /// Runs a command, writing `stdin_data` to it right after starting (e.g. to answer
     /// a `sudo -S` password prompt) before reading the combined output to completion.
     pub async fn exec_with_stdin(&mut self, command: &str, stdin_data: &[u8]) -> Result<String> {
