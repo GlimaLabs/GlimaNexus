@@ -8,6 +8,17 @@ export type PatchNote = {
 // newest first. Not every internal commit needs its own entry.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "0.1.24",
+    date: "2026-08-05",
+    items: [
+      "Neu: Server suchen findet Gameserver, die schon auf dem Server installiert sind, aber der App nicht mehr bekannt sind (z.B. nach App-Neuinstallation)",
+      "Neu: Backups wiederherstellen",
+      "Neu: Automatische Sicherheitsupdates, begrenzte Log-Größe und passende Zeitzone bei neuen Servern",
+      "Minecraft zeigt jetzt live Spieleranzahl und Weltname an",
+      "Diverse Anzeige-Fehler behoben (Update-Button, Versionsanzeige, Backup-Button-Farben)",
+    ],
+  },
+  {
     version: "0.1.23",
     date: "2026-08-05",
     items: [
