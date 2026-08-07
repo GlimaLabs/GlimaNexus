@@ -33,7 +33,7 @@ export default function FirewallPromptDialog({ serverName, serverId, onClose }: 
           <>
             <p style={{ color: "var(--nx-text-muted)", fontSize: 14, lineHeight: 1.5 }}>
               Auf <strong>{serverName}</strong> läuft aktuell keine Firewall. Wir empfehlen, eine zu aktivieren, damit
-              nur die Ports erreichbar sind, die GlimaNexus auch tatsächlich freigibt (SSH bleibt garantiert erlaubt).
+              nur die Ports erreichbar sind, die GrimmNetz auch tatsächlich freigibt (SSH bleibt garantiert erlaubt).
             </p>
             {error && <div className="nx-update-error">{error}</div>}
             {busy && (

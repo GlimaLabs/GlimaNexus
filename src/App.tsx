@@ -11,7 +11,7 @@ import DirectoryBrowserDialog from "./DirectoryBrowserDialog";
 import EditServerDialog from "./EditServerDialog";
 import FirewallPromptDialog from "./FirewallPromptDialog";
 import InstanceDetail from "./InstanceDetail";
-import glimaNexusLogo from "./assets/glimanexus_logo.png";
+import grimmNetzLogo from "./assets/grimmnetz_logo.png";
 import GameIcon from "./GameIcon";
 import DistroIcon from "./DistroIcon";
 import type { GameTemplate, InstanceRecord, InstanceStatus, LocalSystemStats, ServerRecord, VersionInfo } from "./types";
@@ -282,7 +282,7 @@ function App() {
   }
 
   async function handleForget(instance: InstanceRecord) {
-    if (!confirm(`"${instance.display_name}" aus GlimaNexus entfernen? Dienst und Dateien bleiben auf dem Server erhalten.`)) return;
+    if (!confirm(`"${instance.display_name}" aus GrimmNetz entfernen? Dienst und Dateien bleiben auf dem Server erhalten.`)) return;
     setInstanceBusy(instance.id);
     try {
       await invoke("forget_instance", { instanceId: instance.id });
@@ -339,7 +339,7 @@ function App() {
 
   async function handleDisconnectServer() {
     if (!selectedServer) return;
-    if (!confirm(`"${selectedServer.name}" wirklich trennen und aus GlimaNexus entfernen?`)) return;
+    if (!confirm(`"${selectedServer.name}" wirklich trennen und aus GrimmNetz entfernen?`)) return;
     setServerBusy(true);
     try {
       await invoke("delete_server", { id: selectedServer.id });
@@ -362,7 +362,7 @@ function App() {
       <UpdateBanner />
       <aside className="nx-sidebar">
         <div className="nx-brand">
-          <img src={glimaNexusLogo} alt="GlimaNexus" className="nx-brand-logo" />
+          <img src={grimmNetzLogo} alt="GrimmNetz" className="nx-brand-logo" />
         </div>
 
         <nav className="nx-nav">

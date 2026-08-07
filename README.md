@@ -1,4 +1,6 @@
-# GlimaNexus
+![GrimmNetz](.github/grimmnetz_banner.png)
+
+# GrimmNetz
 
 Ressourcenschonende, plattformübergreifende Desktop-App (Tauri 2) zum Verwalten von dedizierten Gameservern auf Linux-VPS via SSH — ohne CLI-Kenntnisse.
 

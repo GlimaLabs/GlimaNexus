@@ -8,6 +8,14 @@ export type PatchNote = {
 // newest first. Not every internal commit needs its own entry.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "0.1.26",
+    date: "2026-08-07",
+    items: [
+      "Umbenannt zu GrimmNetz (vorher GlimaNexus) - neues Logo, App-Icon und Titelleiste",
+      "Fix: Update installierte sich nicht dauerhaft (alte Verknüpfung zeigte auf veraltete Installation)",
+    ],
+  },
+  {
     version: "0.1.25",
     date: "2026-08-05",
     items: [
