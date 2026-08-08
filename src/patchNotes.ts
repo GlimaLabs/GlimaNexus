@@ -8,6 +8,16 @@ export type PatchNote = {
 // newest first. Not every internal commit needs its own entry.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "0.1.29",
+    date: "2026-08-08",
+    items: [
+      "Neu: Konfiguration für 7 Days to Die und Palworld (vorher nur Minecraft/Factorio) - Server Name, Port, Spielmodus, Zombies, Landanspruch, Sandbox-Code u.a.",
+      "Neu: Dropdown-Auswahl für Einstellungen mit festen Werten statt Freitext (z.B. Spielmodus)",
+      "Neu: Versionsanzeige (Steam-Build-Nummer) auch für SteamCMD-Spiele, nicht mehr nur Minecraft",
+      "Fix: Einige 7-Days-to-Die-Einstellungen (Schwierigkeit, XP, Loot) existieren seit Version 1.0 nicht mehr einzeln, sondern nur noch im Sandbox-Code - entsprechend angepasst",
+    ],
+  },
+  {
     version: "0.1.28",
     date: "2026-08-08",
     items: [

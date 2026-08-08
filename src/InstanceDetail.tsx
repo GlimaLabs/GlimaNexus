@@ -528,12 +528,26 @@ export default function InstanceDetail({
                         setConfigValues((prev) => ({ ...prev, [field.key]: e.target.checked ? "true" : "false" }))
                       }
                     />
+                  ) : field.type === "select" && field.options ? (
+                    <select
+                      value={configValues[field.key] ?? ""}
+                      onChange={(e) => setConfigValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    >
+                      {field.options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   ) : (
                     <input
                       type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
                       value={configValues[field.key] ?? ""}
                       onChange={(e) => setConfigValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
                     />
+                  )}
+                  {field.hint && (
+                    <span style={{ color: "var(--nx-text-muted)", fontSize: 11, marginTop: 2 }}>{field.hint}</span>
                   )}
                 </label>
               ))}

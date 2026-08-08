@@ -6,7 +6,15 @@ const GAMES_JSON: &str = include_str!("../resources/games.json");
 pub struct GameInstall {
     #[serde(rename = "type")]
     pub install_type: String,
+    #[serde(default)]
+    pub app_id: Option<u32>,
     pub steps: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigOption {
+    pub value: String,
+    pub label: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -14,12 +22,21 @@ pub struct ConfigField {
     pub key: String,
     pub label: String,
     #[serde(rename = "type")]
-    pub field_type: String, // "text" | "number" | "password" | "bool"
+    pub field_type: String, // "text" | "number" | "password" | "bool" | "select"
     pub default: String,
     /// Set to "tcp" or "udp" when this field controls the game's listen port - after saving,
     /// the new port gets opened in the server's firewall the same way the install-time ports do.
     #[serde(default)]
     pub opens_port_protocol: Option<String>,
+    /// Fixed set of valid values for "select" fields, shown as a dropdown instead of free text -
+    /// games like 7 Days to Die reject anything outside a specific set (e.g. GameMode) and typing
+    /// a free-text value there silently breaks the server.
+    #[serde(default)]
+    pub options: Option<Vec<ConfigOption>>,
+    /// Short explanatory text shown under the field - for values that need more context than a
+    /// label alone can give (e.g. where to get 7 Days to Die's SandboxCode).
+    #[serde(default)]
+    pub hint: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -84,6 +101,33 @@ pub fn shell_single_quote(s: &str) -> String {
 
 /// Extracts the schema's known fields out of a raw config file's contents, falling back to
 /// each field's default when the key is absent (e.g. file doesn't exist yet).
+/// Splits Palworld's `OptionSettings=(Key=Value,Key2="a,b",...)` body on top-level commas,
+/// ignoring commas inside double-quoted string values (e.g. a `ServerName` containing spaces).
+fn split_ini_tuple(body: &str) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    for c in body.chars() {
+        match c {
+            '"' => {
+                in_quotes = !in_quotes;
+                current.push(c);
+            }
+            ',' if !in_quotes => {
+                pairs.push(std::mem::take(&mut current));
+            }
+            _ => current.push(c),
+        }
+    }
+    if !current.is_empty() {
+        pairs.push(current);
+    }
+    pairs
+        .into_iter()
+        .filter_map(|pair| pair.split_once('=').map(|(k, v)| (k.trim().to_string(), v.trim().to_string())))
+        .collect()
+}
+
 pub fn parse_config(schema: &ConfigSchema, raw: &str) -> std::collections::HashMap<String, String> {
     let mut found = std::collections::HashMap::new();
     match schema.format.as_str() {
@@ -95,6 +139,34 @@ pub fn parse_config(schema: &ConfigSchema, raw: &str) -> std::collections::HashM
                         other => other.to_string(),
                     };
                     found.insert(k, s);
+                }
+            }
+        }
+        // 7 Days to Die's serverconfig.xml: <property name="X" value="Y"/> per line.
+        "xml-properties" => {
+            for line in raw.lines() {
+                let Some(name_start) = line.find("name=\"") else { continue };
+                let after_name = &line[name_start + 6..];
+                let Some(name_end) = after_name.find('"') else { continue };
+                let name = &after_name[..name_end];
+
+                let Some(value_start) = line.find("value=\"") else { continue };
+                let after_value = &line[value_start + 7..];
+                let Some(value_end) = after_value.find('"') else { continue };
+                let value = &after_value[..value_end];
+
+                found.insert(name.to_string(), value.to_string());
+            }
+        }
+        // Palworld's PalWorldSettings.ini: everything lives in one line,
+        // OptionSettings=(Key=Value,Key2=Value2,...).
+        "palworld-ini" => {
+            if let Some(paren_start) = raw.find("OptionSettings=(") {
+                let after = &raw[paren_start + "OptionSettings=(".len()..];
+                if let Some(paren_end) = after.rfind(')') {
+                    for (k, v) in split_ini_tuple(&after[..paren_end]) {
+                        found.insert(k, v.trim_matches('"').to_string());
+                    }
                 }
             }
         }
@@ -129,6 +201,56 @@ pub fn render_config(
     values: &std::collections::HashMap<String, String>,
 ) -> String {
     match schema.format.as_str() {
+        // Only ever replaces the value="..." of a line whose name="..." matches a known
+        // field - every other line (comments, unknown properties) passes through untouched.
+        "xml-properties" => raw
+            .lines()
+            .map(|line| {
+                let Some(name_start) = line.find("name=\"") else { return line.to_string() };
+                let after_name = &line[name_start + 6..];
+                let Some(name_end) = after_name.find('"') else { return line.to_string() };
+                let name = &after_name[..name_end];
+                let Some(field) = schema.fields.iter().find(|f| f.key == name) else { return line.to_string() };
+                let Some(new_value) = values.get(&field.key) else { return line.to_string() };
+
+                let Some(value_start) = line.find("value=\"") else { return line.to_string() };
+                let after_value = &line[value_start + 7..];
+                let Some(value_end) = after_value.find('"') else { return line.to_string() };
+                format!(
+                    "{}value=\"{new_value}\"{}",
+                    &line[..value_start],
+                    &after_value[value_end + 1..]
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        "palworld-ini" => {
+            let Some(paren_start) = raw.find("OptionSettings=(") else { return raw.to_string() };
+            let tuple_start = paren_start + "OptionSettings=(".len();
+            let Some(paren_end) = raw[tuple_start..].rfind(')').map(|i| tuple_start + i) else {
+                return raw.to_string();
+            };
+
+            let mut pairs = split_ini_tuple(&raw[tuple_start..paren_end]);
+            for field in &schema.fields {
+                if let Some(new_value) = values.get(&field.key) {
+                    // String-typed values (ServerName, ServerPassword, ...) must stay quoted -
+                    // Palworld's own parser rejects an unquoted value for those keys.
+                    let rendered = if field.field_type == "text" || field.field_type == "password" {
+                        format!("\"{new_value}\"")
+                    } else {
+                        new_value.clone()
+                    };
+                    if let Some(existing) = pairs.iter_mut().find(|(k, _)| k == &field.key) {
+                        existing.1 = rendered;
+                    } else {
+                        pairs.push((field.key.clone(), rendered));
+                    }
+                }
+            }
+            let body = pairs.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(",");
+            format!("{}{body}{}", &raw[..tuple_start], &raw[paren_end..])
+        }
         "json" => {
             let mut root: serde_json::Value =
                 serde_json::from_str(raw).unwrap_or_else(|_| serde_json::json!({}));

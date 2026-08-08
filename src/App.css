@@ -1146,6 +1146,22 @@
   height: 16px;
 }
 
+.nx-config-field select {
+  background: var(--nx-panel-alt);
+  border: 1px solid var(--nx-border);
+  border-radius: var(--nx-radius);
+  padding: 8px 10px;
+  color: var(--nx-text);
+  font-size: 13px;
+  font-family: inherit;
+  accent-color: var(--nx-accent);
+}
+
+.nx-config-field select option {
+  background: var(--nx-panel);
+  color: var(--nx-text);
+}
+
 .nx-console {
   background: #05080c;
   border: 1px solid var(--nx-border);

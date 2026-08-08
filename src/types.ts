@@ -22,11 +22,18 @@ export type LocalSystemStats = {
   net_down_kbps: number;
 };
 
+export type ConfigOption = {
+  value: string;
+  label: string;
+};
+
 export type ConfigField = {
   key: string;
   label: string;
-  type: "text" | "number" | "password" | "bool";
+  type: "text" | "number" | "password" | "bool" | "select";
   default: string;
+  options?: ConfigOption[];
+  hint?: string;
 };
 
 export type ConfigSchema = {

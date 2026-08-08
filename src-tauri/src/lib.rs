@@ -660,7 +660,27 @@ async fn get_instance_version(
     install_path: String,
 ) -> Result<VersionInfo, String> {
     if game_id != "minecraft-paper" {
-        return Err("Für dieses Spiel gibt es noch keine Versionsanzeige".to_string());
+        let template = games::find_template(&game_id).ok_or_else(|| format!("Unbekanntes Spiel: {game_id}"))?;
+        let Some(app_id) = template.install.app_id else {
+            return Err("Für dieses Spiel gibt es noch keine Versionsanzeige".to_string());
+        };
+
+        let mut guard = acquire_session(&state, &server_id).await?;
+        let session = guard.as_mut().unwrap();
+        let manifest_path = format!("{install_path}/steamapps/appmanifest_{app_id}.acf");
+        let raw = session
+            .exec(&format!("sudo cat {} 2>/dev/null", games::shell_single_quote(&manifest_path)))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // steamcmd doesn't reliably expose a "latest build for this branch" number without a
+        // much heavier app_info_print + VDF parse, so this only ever reports the locally
+        // installed build - never a false "update available" that isn't backed by a real check.
+        let installed = raw
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("\"buildid\"").map(|rest| rest.trim().trim_matches('"').to_string()));
+
+        return Ok(VersionInfo { installed, latest: None, up_to_date: true });
     }
 
     let mut guard = acquire_session(&state, &server_id).await?;

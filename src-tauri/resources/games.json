@@ -21,10 +21,17 @@
         "format": "properties",
         "fields": [
           { "key": "motd", "label": "Server Name (MOTD)", "type": "text", "default": "A Minecraft Server" },
-          { "key": "max-players", "label": "Spieler Slots", "type": "number", "default": "20" },
+          { "key": "gamemode", "label": "Spielmodus", "type": "text", "default": "survival" },
+          { "key": "difficulty", "label": "Schwierigkeitsgrad", "type": "text", "default": "easy" },
+          { "key": "max-players", "label": "Maximale Spieleranzahl", "type": "number", "default": "20" },
           { "key": "server-port", "label": "Port", "type": "number", "default": "25565", "opens_port_protocol": "tcp" },
-          { "key": "difficulty", "label": "Schwierigkeit", "type": "text", "default": "easy" },
-          { "key": "white-list", "label": "Whitelist aktiv", "type": "bool", "default": "false" }
+          { "key": "white-list", "label": "White-List aktivieren", "type": "bool", "default": "false" },
+          { "key": "pvp", "label": "PvP aktivieren", "type": "bool", "default": "true" },
+          { "key": "view-distance", "label": "Sichtweite (Chunks)", "type": "number", "default": "10" },
+          { "key": "online-mode", "label": "Online-Mode (Authentifizierung)", "type": "bool", "default": "true" },
+          { "key": "hardcore", "label": "Hardcore-Modus", "type": "bool", "default": "false" },
+          { "key": "spawn-protection", "label": "Spawn-Schutz (Radius in Blöcken)", "type": "number", "default": "16" },
+          { "key": "allow-flight", "label": "Fliegen erlauben", "type": "bool", "default": "false" }
         ]
       },
       "ports": [{ "port": 25565, "protocol": "tcp" }]
@@ -46,6 +53,36 @@
       "start_command": "./PalServer.sh -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS",
       "default_cpu_limit_percent": 200,
       "default_ram_limit_mb": 8192,
+      "config": {
+        "file": "Pal/Saved/Config/LinuxServer/PalWorldSettings.ini",
+        "format": "palworld-ini",
+        "fields": [
+          { "key": "ServerName", "label": "Server Name", "type": "text", "default": "GrimmNetz Palworld" },
+          { "key": "ServerPassword", "label": "Server Passwort", "type": "password", "default": "" },
+          { "key": "DayTimeSpeedRate", "label": "Geschwindigkeit Tag", "type": "number", "default": "1.000000" },
+          { "key": "NightTimeSpeedRate", "label": "Geschwindigkeit Nacht", "type": "number", "default": "1.000000" },
+          { "key": "ExpRate", "label": "Erfahrungspunkte-Multiplikator", "type": "number", "default": "1.000000" },
+          { "key": "PalCaptureRate", "label": "Fangchance Pals", "type": "number", "default": "1.000000" },
+          { "key": "PalSpawnNumRate", "label": "Pal-Spawnrate", "type": "number", "default": "1.000000" },
+          { "key": "PlayerDamageRateAttack", "label": "Spieler-Schaden austeilen", "type": "number", "default": "1.000000" },
+          { "key": "PalDamageRateAttack", "label": "Pal-Schaden austeilen", "type": "number", "default": "1.000000" },
+          { "key": "DropItemMaxNum", "label": "Maximale liegende Items", "type": "number", "default": "3000" },
+          { "key": "CollectionDropRate", "label": "Ressourcen-Multiplikator", "type": "number", "default": "1.000000" },
+          {
+            "key": "DeathPenalty",
+            "label": "Todesstrafe",
+            "type": "select",
+            "default": "All",
+            "options": [
+              { "value": "None", "label": "Nichts verlieren" },
+              { "value": "Item", "label": "Nur Items" },
+              { "value": "ItemAndEquipment", "label": "Items und Pals" },
+              { "value": "All", "label": "Alles verlieren" }
+            ]
+          },
+          { "key": "GuildPlayerMaxNum", "label": "Maximale Gildengröße", "type": "number", "default": "20" }
+        ]
+      },
       "ports": [{ "port": 8211, "protocol": "udp" }]
     },
     {
@@ -65,6 +102,34 @@
       "start_command": "./7DaysToDieServer.x86_64 -logfile /home/gameserver/instances/{instance_id}/7dtd.log -batchmode -nographics -dedicated -configfile=serverconfig.xml",
       "default_cpu_limit_percent": 200,
       "default_ram_limit_mb": 6144,
+      "config": {
+        "file": "serverconfig.xml",
+        "format": "xml-properties",
+        "fields": [
+          { "key": "ServerName", "label": "Server Name", "type": "text", "default": "My Game Host" },
+          { "key": "ServerPort", "label": "Port", "type": "number", "default": "26900", "opens_port_protocol": "tcp" },
+          {
+            "key": "GameMode",
+            "label": "Spielmodus",
+            "type": "select",
+            "default": "GameModeSurvival",
+            "options": [
+              { "value": "GameModeSurvival", "label": "Survival" },
+              { "value": "GameModeCreative", "label": "Creative" }
+            ]
+          },
+          { "key": "MaxSpawnedZombies", "label": "Maximale Zombies gleichzeitig", "type": "number", "default": "64" },
+          { "key": "LandClaimSize", "label": "Landanspruch-Größe (Blöcke)", "type": "number", "default": "41" },
+          { "key": "ServerMaxPlayerCount", "label": "Maximale Spieleranzahl", "type": "number", "default": "8" },
+          {
+            "key": "SandboxCode",
+            "label": "Sandbox-Code (Schwierigkeit, XP, Loot, Blutmond, ...)",
+            "type": "text",
+            "default": "",
+            "hint": "Seit Version 1.0+ steckt die komplette Gameplay-Balance (Schwierigkeit, XP, Beute, Blutmond) in diesem einen Code statt in Einzelwerten. Erzeugen: lokal 7 Days to Die starten, 'Neues Spiel' -> Sandbox-Optionen nach Wunsch einstellen -> generierten Code hier einfügen."
+          }
+        ]
+      },
       "ports": [
         { "port": 26900, "protocol": "tcp" },
         { "port": 26900, "protocol": "udp" }
