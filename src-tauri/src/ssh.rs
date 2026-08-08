@@ -68,6 +68,16 @@ impl SshSession {
         Ok(String::from_utf8_lossy(&bytes).to_string())
     }
 
+    /// Same as `exec`, but with a much longer timeout - for commands that legitimately take
+    /// minutes (steamcmd downloads during game installation), where the 20s default would
+    /// abort a perfectly healthy, still-running install.
+    pub async fn exec_long(&mut self, command: &str) -> Result<String> {
+        let bytes = tokio::time::timeout(Duration::from_secs(1800), self.exec_bytes_inner(command))
+            .await
+            .map_err(|_| anyhow!("Zeitüberschreitung beim Ausführen des Befehls (Verbindung tot?)"))??;
+        Ok(String::from_utf8_lossy(&bytes).to_string())
+    }
+
     /// Same as `exec`, but returns the raw output bytes instead of lossy-decoding them as
     /// UTF-8 - required for pulling down binary file content (e.g. `cat` on a backup archive)
     /// without corrupting it. Uses a longer timeout since files can take a while to transfer.

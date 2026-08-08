@@ -404,7 +404,7 @@ async fn install_game(
         let rendered = games::render_step(step, &instance_id, ram_limit_mb);
         let quoted = games::shell_single_quote(&rendered);
         session
-            .exec(&format!("sudo -u gameserver bash -c {quoted}"))
+            .exec_long(&format!("sudo -u gameserver bash -c {quoted}"))
             .await
             .map_err(|e| e.to_string())?;
     }
@@ -718,7 +718,7 @@ async fn update_instance(
         let rendered = games::render_step(step, instance_id, ram_limit_mb);
         let quoted = games::shell_single_quote(&rendered);
         session
-            .exec(&format!("sudo -u gameserver bash -c {quoted}"))
+            .exec_long(&format!("sudo -u gameserver bash -c {quoted}"))
             .await
             .map_err(|e| e.to_string())?;
     }

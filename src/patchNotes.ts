@@ -8,6 +8,14 @@ export type PatchNote = {
 // newest first. Not every internal commit needs its own entry.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "0.1.27",
+    date: "2026-08-08",
+    items: [
+      "Fix: Spiele-Installation aus dem App-Store brach bei größeren Downloads mit Zeitüberschreitung ab (Timeout war fix auf 20 Sekunden)",
+      "Ausführbarer Dateiname jetzt grimmnetz.exe statt glimanexus.exe",
+    ],
+  },
+  {
     version: "0.1.26",
     date: "2026-08-07",
     items: [
