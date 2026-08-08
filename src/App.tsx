@@ -75,6 +75,7 @@ function App() {
   const [instanceVersions, setInstanceVersions] = useState<Record<string, VersionInfo>>({});
   const [updatingInstanceId, setUpdatingInstanceId] = useState<string | null>(null);
   const [installingGame, setInstallingGame] = useState<GameTemplate | null>(null);
+  const [installProgress, setInstallProgress] = useState<string>("");
   const [showPatchNotes, setShowPatchNotes] = useState(false);
   const [browsingInstance, setBrowsingInstance] = useState<{ instance: InstanceRecord; target: "install" | "backups" } | null>(null);
   const [openServerMenuId, setOpenServerMenuId] = useState<string | null>(null);
@@ -599,7 +600,7 @@ function App() {
                   </div>
                   <div style={{ fontSize: 12, color: "var(--nx-text-muted)" }}>
                     <span className="nx-spinner" />
-                    Download & Einrichtung auf dem Server, kann 1–2 Minuten dauern
+                    {installProgress || "Download & Einrichtung auf dem Server, kann je nach Spielgröße mehrere Minuten dauern"}
                   </div>
                 </div>
               )}
@@ -795,8 +796,15 @@ function App() {
             setInstances((prev) => [...prev, instance]);
             setShowStoreDialog(false);
           }}
-          onInstallStart={setInstallingGame}
-          onInstallDone={() => setInstallingGame(null)}
+          onInstallStart={(game) => {
+            setInstallProgress("");
+            setInstallingGame(game);
+          }}
+          onInstallProgress={setInstallProgress}
+          onInstallDone={() => {
+            setInstallingGame(null);
+            setInstallProgress("");
+          }}
         />
       )}
 

@@ -102,6 +102,31 @@ pub enum LogEvent {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "event", rename_all = "camelCase")]
+pub enum InstallEvent {
+    Step { label: String },
+    Progress { percent: f32, phase: String },
+}
+
+/// Pulls the percentage and phase out of steamcmd's redrawn-in-place status line, e.g.
+/// `Update state (0x61) downloading, progress: 42.30 (123456789 / 291234567)`. steamcmd
+/// runs a download pass and then a separate verify pass, each counting 0-100% on its own -
+/// without the phase name that looks to the user like the whole install restarted at 0%.
+fn parse_steamcmd_progress(line: &str) -> Option<(f32, String)> {
+    let after = line.split("progress:").nth(1)?;
+    let number = after.trim().split(|c: char| c == ' ' || c == '%').next()?;
+    let percent = number.trim().parse::<f32>().ok()?;
+    let phase = if line.contains("verifying") {
+        "Überprüfung"
+    } else if line.contains("downloading") {
+        "Download"
+    } else {
+        "Installation"
+    };
+    Some((percent, phase.to_string()))
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(tag = "event", rename_all = "camelCase")]
 pub enum UploadEvent {
     Progress {
         #[serde(rename = "bytesSent")]
@@ -379,6 +404,7 @@ async fn install_game(
     server_id: String,
     game_id: String,
     display_name: String,
+    on_event: Channel<InstallEvent>,
 ) -> Result<InstanceRecord, String> {
     let template = games::find_template(&game_id).ok_or_else(|| format!("Unbekanntes Spiel: {game_id}"))?;
 
@@ -400,13 +426,43 @@ async fn install_game(
         .await
         .map_err(|e| e.to_string())?;
 
-    for step in &template.install.steps {
+    let total_steps = template.install.steps.len();
+    let mut step_result: Result<(), String> = Ok(());
+    for (idx, step) in template.install.steps.iter().enumerate() {
+        let _ = on_event.send(InstallEvent::Step {
+            label: format!("Schritt {}/{total_steps}", idx + 1),
+        });
         let rendered = games::render_step(step, &instance_id, ram_limit_mb);
         let quoted = games::shell_single_quote(&rendered);
-        session
-            .exec_long(&format!("sudo -u gameserver bash -c {quoted}"))
-            .await
-            .map_err(|e| e.to_string())?;
+        let command = format!("sudo -u gameserver bash -c {quoted}");
+
+        let outcome = if template.install.install_type == "steamcmd" {
+            // steamcmd redraws its own progress line - stream it so the frontend can show a
+            // real percentage instead of a bare spinner for what's usually the slowest step.
+            session
+                .exec_stream_lines(&command, |line| {
+                    if let Some((percent, phase)) = parse_steamcmd_progress(&line) {
+                        let _ = on_event.send(InstallEvent::Progress { percent, phase });
+                    }
+                })
+                .await
+                .map_err(|e| e.to_string())
+        } else {
+            session.exec_long(&command).await.map_err(|e| e.to_string()).map(|_| ())
+        };
+
+        if let Err(e) = outcome {
+            step_result = Err(e);
+            break;
+        }
+    }
+
+    if let Err(e) = step_result {
+        // Don't leave a half-downloaded install lying around on failure (dead connection,
+        // timeout, disk full, ...) - every failed attempt otherwise silently eats disk space
+        // forever since nothing else ever points at or cleans up this instance_id again.
+        let _ = session.exec(&format!("sudo rm -rf {install_path}")).await;
+        return Err(e);
     }
 
     let start_command = games::render_step(&template.start_command, &instance_id, ram_limit_mb);
@@ -910,16 +966,32 @@ async fn delete_instance(
 ) -> Result<(), String> {
     validate_instance_path(&install_path, &instance_id)?;
 
-    if let Ok(mut guard) = acquire_session(&state, &server_id).await {
-        let session = guard.as_mut().unwrap();
-        let _ = provisioning::control_instance(session, &unit_name, "stop").await;
-        let _ = session.exec(&format!("sudo systemctl disable {unit_name}")).await;
-        let _ = session
-            .exec(&format!("sudo rm -f /etc/systemd/system/{unit_name}.service"))
-            .await;
-        let _ = session.exec("sudo systemctl daemon-reload").await;
-        let _ = session.exec(&format!("sudo rm -rf {install_path}")).await;
+    // Deleting only from the local DB while the server-side cleanup silently failed would
+    // leave the service running and the files in place forever, with the app having no way
+    // left to find or retry it - so a dead/failing SSH session must fail the whole command,
+    // not just skip straight to removing the local record.
+    let mut guard = acquire_session(&state, &server_id).await?;
+    let session = guard.as_mut().unwrap();
+    let stop_result = provisioning::control_instance(session, &unit_name, "stop").await;
+    if let Err(e) = &stop_result {
+        *guard = None;
+        return Err(format!("Konnte Dienst nicht stoppen: {e}"));
     }
+    session
+        .exec(&format!("sudo systemctl disable {unit_name}"))
+        .await
+        .map_err(|e| e.to_string())?;
+    session
+        .exec(&format!("sudo rm -f /etc/systemd/system/{unit_name}.service"))
+        .await
+        .map_err(|e| e.to_string())?;
+    session.exec("sudo systemctl daemon-reload").await.map_err(|e| e.to_string())?;
+    session
+        .exec(&format!("sudo rm -rf {install_path}"))
+        .await
+        .map_err(|e| e.to_string())?;
+    drop(guard);
+
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.delete_instance(&instance_id).map_err(|e| e.to_string())
 }

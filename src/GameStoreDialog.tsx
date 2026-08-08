@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import type { GameTemplate, InstanceRecord } from "./types";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import type { GameTemplate, InstallEvent, InstanceRecord } from "./types";
 import GameIcon from "./GameIcon";
 
 type Props = {
@@ -8,10 +8,11 @@ type Props = {
   onClose: () => void;
   onInstalled: (instance: InstanceRecord) => void;
   onInstallStart: (game: GameTemplate) => void;
+  onInstallProgress: (label: string) => void;
   onInstallDone: () => void;
 };
 
-export default function GameStoreDialog({ serverId, onClose, onInstalled, onInstallStart, onInstallDone }: Props) {
+export default function GameStoreDialog({ serverId, onClose, onInstalled, onInstallStart, onInstallProgress, onInstallDone }: Props) {
   const [games, setGames] = useState<GameTemplate[]>([]);
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -27,10 +28,16 @@ export default function GameStoreDialog({ serverId, onClose, onInstalled, onInst
     setError("");
     onInstallStart(game);
     try {
+      const onEvent = new Channel<InstallEvent>();
+      onEvent.onmessage = (event) => {
+        if (event.event === "step") onInstallProgress(event.label);
+        else onInstallProgress(`${event.phase}: ${event.percent.toFixed(0)}%`);
+      };
       const instance = await invoke<InstanceRecord>("install_game", {
         serverId,
         gameId: game.id,
         displayName: game.name,
+        onEvent,
       });
       onInstalled(instance);
     } catch (err) {
@@ -73,7 +80,7 @@ export default function GameStoreDialog({ serverId, onClose, onInstalled, onInst
         </div>
 
         <div className="nx-modal-actions">
-          <button type="button" onClick={onClose} disabled={installingId !== null}>
+          <button type="button" onClick={onClose}>
             Schließen
           </button>
         </div>

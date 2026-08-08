@@ -8,6 +8,16 @@ export type PatchNote = {
 // newest first. Not every internal commit needs its own entry.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "0.1.28",
+    date: "2026-08-08",
+    items: [
+      "Neu: Live-Fortschrittsanzeige bei der Installation (Schritt, Download/Überprüfung, Prozent)",
+      "Fix: Fehlgeschlagene Installationen ließen halbfertige Downloads auf dem Server liegen - werden jetzt automatisch aufgeräumt",
+      "Fix: 'Komplett deinstallieren' konnte bei Verbindungsfehlern die Instanz nur lokal entfernen, Dienst/Dateien blieben unbemerkt auf dem Server erhalten",
+      "Fix: 7 Days to Die startete nicht (falsches Start-Flag, ungültiger Log-Pfad)",
+    ],
+  },
+  {
     version: "0.1.27",
     date: "2026-08-08",
     items: [

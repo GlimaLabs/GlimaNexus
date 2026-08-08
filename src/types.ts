@@ -65,6 +65,10 @@ export type GameTemplate = {
   config?: ConfigSchema;
 };
 
+export type InstallEvent =
+  | { event: "step"; label: string }
+  | { event: "progress"; percent: number; phase: string };
+
 export type InstanceRecord = {
   id: string;
   server_id: string;

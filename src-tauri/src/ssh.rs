@@ -171,7 +171,10 @@ impl SshSession {
             match msg {
                 ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
                     buffer.extend_from_slice(&data);
-                    while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+                    // steamcmd redraws its download-progress line in place using '\r' instead
+                    // of '\n' - treat both as a line boundary so progress updates stream out
+                    // instead of piling up in the buffer until an unrelated '\n' shows up.
+                    while let Some(pos) = buffer.iter().position(|&b| b == b'\n' || b == b'\r') {
                         let line: Vec<u8> = buffer.drain(..=pos).collect();
                         let text = String::from_utf8_lossy(&line).trim_end().to_string();
                         on_line(text);
